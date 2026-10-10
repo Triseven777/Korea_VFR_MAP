@@ -892,11 +892,29 @@
       transform: translateY(1px);
     }
 
+
+    #runtimeStatusBanner {
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      z-index: 1000;
+      max-width: min(560px, calc(100vw - 24px));
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(110, 24, 24, 0.92);
+      border: 1px solid rgba(255,255,255,.28);
+      color: #fff;
+      font: 600 11px/1.35 Arial, sans-serif;
+      display: none;
+      pointer-events: none;
+    }
+
   </style>
 </head>
 
 <body>
   <div id="map"></div>
+  <div id="runtimeStatusBanner"></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -978,9 +996,9 @@
   </div>
 
 
-  <script src="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.js"></script>
+    <script type="module">
+  import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
 
-  <script type="module">
   (async () => {
     let magvarFn = null;
 
@@ -1041,6 +1059,22 @@
         ]
       },
       attributionControl: true
+    });
+
+    map.on("error", (event) => {
+      const message =
+        event?.error?.message ||
+        event?.message ||
+        "Unknown MapLibre error";
+
+      console.error("MapLibre error:", event);
+
+      // Do not show noisy tile-level failures as a fatal app error.
+      if (
+        /custom|shader|webgl|terrain height|framebuffer|texture/i.test(message)
+      ) {
+        showRuntimeStatus("MapLibre rendering warning: " + message);
+      }
     });
 
     const popup = document.getElementById("pointPopup");
@@ -1456,14 +1490,19 @@
 
     function extractProjectionMatrix(matrixLike) {
       if (!matrixLike) return null;
-      if (Array.isArray(matrixLike) || ArrayBuffer.isView(matrixLike)) {
-        return matrixLike;
-      }
+
+      // MapLibre 6 custom-layer official render input.
       if (matrixLike.defaultProjectionData?.mainMatrix) {
         return matrixLike.defaultProjectionData.mainMatrix;
       }
+
+      // Backward-compatible fallbacks used by older prototype code.
+      if (Array.isArray(matrixLike) || ArrayBuffer.isView(matrixLike)) {
+        return matrixLike;
+      }
       if (matrixLike.mainMatrix) return matrixLike.mainMatrix;
       if (matrixLike.projectionMatrix) return matrixLike.projectionMatrix;
+
       return null;
     }
 
@@ -1606,6 +1645,8 @@
 
 
     const route3DLayerState = {
+      disabled: false,
+      error: null,
       curtainProgram: null,
       airProgram: null,
       curtainBuffer: null,
@@ -2089,6 +2130,51 @@
       );
     }
 
+    function showRuntimeStatus(message) {
+      console.error(message);
+
+      const el = document.getElementById("runtimeStatusBanner");
+      if (!el) return;
+
+      el.textContent = String(message);
+      el.style.display = "block";
+    }
+
+    function disableExperimentalCurtain(error) {
+      route3DLayerState.disabled = true;
+      route3DLayerState.error =
+        error instanceof Error
+          ? error.message
+          : String(error);
+
+      showRuntimeStatus(
+        "3D 커튼 렌더링이 비활성화되었습니다. 기본 지도/루트는 계속 사용할 수 있습니다. " +
+        route3DLayerState.error
+      );
+
+      // Ground route must remain usable even when the experimental custom
+      // layer is unavailable.
+      if (map.getLayer("route-line")) {
+        map.setPaintProperty(
+          "route-line",
+          "line-opacity",
+          map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG ? 0 : 1
+        );
+      }
+    }
+
+    function safeEnsureRoute3DLayer() {
+      if (route3DLayerState.disabled) return false;
+
+      try {
+        ensureRoute3DLayer();
+        return true;
+      } catch (error) {
+        disableExperimentalCurtain(error);
+        return false;
+      }
+    }
+
     function ensureRoute3DLayer() {
       if (map.getLayer("route-3d-msl")) return;
 
@@ -2098,7 +2184,19 @@
         renderingMode: "3d",
 
         onAdd(mapInstance, gl) {
-          gl.getExtension("EXT_color_buffer_float");
+          if (
+            typeof WebGL2RenderingContext !== "undefined" &&
+            !(gl instanceof WebGL2RenderingContext)
+          ) {
+            throw new Error("WebGL2 context is required for terrain height-map rendering.");
+          }
+
+          const floatColorExtension =
+            gl.getExtension("EXT_color_buffer_float");
+
+          if (!floatColorExtension) {
+            throw new Error("EXT_color_buffer_float is not available on this device.");
+          }
 
           const curtainVertex = `#version 300 es
             precision highp float;
@@ -2324,192 +2422,206 @@
         },
 
         prerender(gl, options) {
-          rebuildRoute3DGeometryIfNeeded();
+          if (route3DLayerState.disabled) return;
 
-          const bounds = route3DLayerState.bounds;
-
-          if (
-            !bounds ||
-            !route3DLayerState.heightMap ||
-            typeof options?.renderTerrainHeightMap !== "function"
-          ) {
-            route3DLayerState.heightMapReady = false;
-            return;
+          try {
+            
+                      rebuildRoute3DGeometryIfNeeded();
+            
+                      const bounds = route3DLayerState.bounds;
+            
+                      if (
+                        !bounds ||
+                        !route3DLayerState.heightMap ||
+                        typeof options?.renderTerrainHeightMap !== "function"
+                      ) {
+                        route3DLayerState.heightMapReady = false;
+                        return;
+                      }
+            
+                      options.renderTerrainHeightMap({
+                        texture: route3DLayerState.heightMap,
+                        width: HEIGHTMAP_SIZE,
+                        height: HEIGHTMAP_SIZE,
+                        bounds
+                      });
+            
+                      route3DLayerState.heightMapReady = true;
+          } catch (error) {
+            disableExperimentalCurtain(error);
           }
-
-          options.renderTerrainHeightMap({
-            texture: route3DLayerState.heightMap,
-            width: HEIGHTMAP_SIZE,
-            height: HEIGHTMAP_SIZE,
-            bounds
-          });
-
-          route3DLayerState.heightMapReady = true;
         },
 
         render(gl, options) {
-          rebuildRoute3DGeometryIfNeeded();
+          if (route3DLayerState.disabled) return;
 
-          const matrix = extractProjectionMatrix(options);
-          if (!matrix) return;
-
-          const topView =
-            map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG;
-
-          // Thick magenta airborne route.
-          const airVertices = route3DLayerState.airVertices;
-
-          if (airVertices.length >= 48) {
-            const program = route3DLayerState.airProgram;
-            gl.useProgram(program);
-
-            bindAirRibbonAttributes(
-              gl,
-              program,
-              airVertices
-            );
-
-            gl.uniformMatrix4fv(
-              gl.getUniformLocation(program, "u_matrix"),
-              false,
-              matrix
-            );
-
-            gl.uniform2f(
-              gl.getUniformLocation(program, "u_viewport"),
-              gl.drawingBufferWidth,
-              gl.drawingBufferHeight
-            );
-
-            gl.uniform1f(
-              gl.getUniformLocation(program, "u_half_width_px"),
-              AIR_ROUTE_HALF_WIDTH_PX
-            );
-
-            gl.uniform1f(
-              gl.getUniformLocation(program, "u_force_visible"),
-              topView ? 1 : 0
-            );
-
-            gl.uniform4f(
-              gl.getUniformLocation(program, "u_color"),
-              0.93,
-              0.0,
-              0.72,
-              1.0
-            );
-
-            if (route3DLayerState.bounds) {
-              bindTerrainHeightMap(gl, program);
-            }
-
-            if (topView || route3DLayerState.heightMapReady) {
-              gl.enable(gl.DEPTH_TEST);
-              gl.depthFunc(gl.LEQUAL);
-              gl.disable(gl.BLEND);
-
-              gl.drawArrays(
-                gl.TRIANGLES,
-                0,
-                airVertices.length / 8
-              );
-            }
-          }
-
-          // Top view = magenta route only.
-          if (topView) return;
-
-          if (!route3DLayerState.heightMapReady) return;
-
-          const curtainProgram =
-            route3DLayerState.curtainProgram;
-          gl.useProgram(curtainProgram);
-
-          gl.uniformMatrix4fv(
-            gl.getUniformLocation(curtainProgram, "u_matrix"),
-            false,
-            matrix
-          );
-
-          bindTerrainHeightMap(gl, curtainProgram);
-
-          gl.enable(gl.DEPTH_TEST);
-          gl.depthFunc(gl.LEQUAL);
-          gl.disable(gl.CULL_FACE);
-
-          // Navy curtain, 80% transparent.
-          const curtainVertices =
-            route3DLayerState.curtainVertices;
-
-          if (curtainVertices.length >= 18) {
-            bindCurtainAttributes(
-              gl,
-              curtainProgram,
-              route3DLayerState.curtainBuffer,
-              curtainVertices
-            );
-
-            gl.uniform4f(
-              gl.getUniformLocation(curtainProgram, "u_color"),
-              0.06,
-              0.16,
-              0.30,
-              CURTAIN_ALPHA
-            );
-
-            gl.enable(gl.BLEND);
-            gl.blendFuncSeparate(
-              gl.SRC_ALPHA,
-              gl.ONE_MINUS_SRC_ALPHA,
-              gl.ONE,
-              gl.ONE_MINUS_SRC_ALPHA
-            );
-            gl.depthMask(false);
-
-            gl.drawArrays(
-              gl.TRIANGLES,
-              0,
-              curtainVertices.length / 6
-            );
-
-            gl.depthMask(true);
-          }
-
-          // Vertical reference lines every 0.5 NM.
-          const verticalVertices =
-            route3DLayerState.verticalVertices;
-
-          if (verticalVertices.length >= 12) {
-            bindCurtainAttributes(
-              gl,
-              curtainProgram,
-              route3DLayerState.verticalBuffer,
-              verticalVertices
-            );
-
-            gl.uniform4f(
-              gl.getUniformLocation(curtainProgram, "u_color"),
-              0.46,
-              0.62,
-              0.78,
-              0.75
-            );
-
-            gl.enable(gl.BLEND);
-            gl.blendFuncSeparate(
-              gl.SRC_ALPHA,
-              gl.ONE_MINUS_SRC_ALPHA,
-              gl.ONE,
-              gl.ONE_MINUS_SRC_ALPHA
-            );
-
-            gl.lineWidth(1);
-
-            gl.drawArrays(
-              gl.LINES,
-              0,
-              verticalVertices.length / 6
-            );
+          try {
+            
+                      rebuildRoute3DGeometryIfNeeded();
+            
+                      const matrix = extractProjectionMatrix(options);
+                      if (!matrix) return;
+            
+                      const topView =
+                        map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG;
+            
+                      // Thick magenta airborne route.
+                      const airVertices = route3DLayerState.airVertices;
+            
+                      if (airVertices.length >= 48) {
+                        const program = route3DLayerState.airProgram;
+                        gl.useProgram(program);
+            
+                        bindAirRibbonAttributes(
+                          gl,
+                          program,
+                          airVertices
+                        );
+            
+                        gl.uniformMatrix4fv(
+                          gl.getUniformLocation(program, "u_matrix"),
+                          false,
+                          matrix
+                        );
+            
+                        gl.uniform2f(
+                          gl.getUniformLocation(program, "u_viewport"),
+                          gl.drawingBufferWidth,
+                          gl.drawingBufferHeight
+                        );
+            
+                        gl.uniform1f(
+                          gl.getUniformLocation(program, "u_half_width_px"),
+                          AIR_ROUTE_HALF_WIDTH_PX
+                        );
+            
+                        gl.uniform1f(
+                          gl.getUniformLocation(program, "u_force_visible"),
+                          topView ? 1 : 0
+                        );
+            
+                        gl.uniform4f(
+                          gl.getUniformLocation(program, "u_color"),
+                          0.93,
+                          0.0,
+                          0.72,
+                          1.0
+                        );
+            
+                        if (route3DLayerState.bounds) {
+                          bindTerrainHeightMap(gl, program);
+                        }
+            
+                        if (topView || route3DLayerState.heightMapReady) {
+                          gl.enable(gl.DEPTH_TEST);
+                          gl.depthFunc(gl.LEQUAL);
+                          gl.disable(gl.BLEND);
+            
+                          gl.drawArrays(
+                            gl.TRIANGLES,
+                            0,
+                            airVertices.length / 8
+                          );
+                        }
+                      }
+            
+                      // Top view = magenta route only.
+                      if (topView) return;
+            
+                      if (!route3DLayerState.heightMapReady) return;
+            
+                      const curtainProgram =
+                        route3DLayerState.curtainProgram;
+                      gl.useProgram(curtainProgram);
+            
+                      gl.uniformMatrix4fv(
+                        gl.getUniformLocation(curtainProgram, "u_matrix"),
+                        false,
+                        matrix
+                      );
+            
+                      bindTerrainHeightMap(gl, curtainProgram);
+            
+                      gl.enable(gl.DEPTH_TEST);
+                      gl.depthFunc(gl.LEQUAL);
+                      gl.disable(gl.CULL_FACE);
+            
+                      // Navy curtain, 80% transparent.
+                      const curtainVertices =
+                        route3DLayerState.curtainVertices;
+            
+                      if (curtainVertices.length >= 18) {
+                        bindCurtainAttributes(
+                          gl,
+                          curtainProgram,
+                          route3DLayerState.curtainBuffer,
+                          curtainVertices
+                        );
+            
+                        gl.uniform4f(
+                          gl.getUniformLocation(curtainProgram, "u_color"),
+                          0.06,
+                          0.16,
+                          0.30,
+                          CURTAIN_ALPHA
+                        );
+            
+                        gl.enable(gl.BLEND);
+                        gl.blendFuncSeparate(
+                          gl.SRC_ALPHA,
+                          gl.ONE_MINUS_SRC_ALPHA,
+                          gl.ONE,
+                          gl.ONE_MINUS_SRC_ALPHA
+                        );
+                        gl.depthMask(false);
+            
+                        gl.drawArrays(
+                          gl.TRIANGLES,
+                          0,
+                          curtainVertices.length / 6
+                        );
+            
+                        gl.depthMask(true);
+                      }
+            
+                      // Vertical reference lines every 0.5 NM.
+                      const verticalVertices =
+                        route3DLayerState.verticalVertices;
+            
+                      if (verticalVertices.length >= 12) {
+                        bindCurtainAttributes(
+                          gl,
+                          curtainProgram,
+                          route3DLayerState.verticalBuffer,
+                          verticalVertices
+                        );
+            
+                        gl.uniform4f(
+                          gl.getUniformLocation(curtainProgram, "u_color"),
+                          0.46,
+                          0.62,
+                          0.78,
+                          0.75
+                        );
+            
+                        gl.enable(gl.BLEND);
+                        gl.blendFuncSeparate(
+                          gl.SRC_ALPHA,
+                          gl.ONE_MINUS_SRC_ALPHA,
+                          gl.ONE,
+                          gl.ONE_MINUS_SRC_ALPHA
+                        );
+            
+                        gl.lineWidth(1);
+            
+                        gl.drawArrays(
+                          gl.LINES,
+                          0,
+                          verticalVertices.length / 6
+                        );
+                      }
+          } catch (error) {
+            disableExperimentalCurtain(error);
           }
         },
 
@@ -2573,6 +2685,12 @@
         terrainExaggeration: 1,
         routeVerticalExaggeration: false,
         heightMapSize: HEIGHTMAP_SIZE,
+        customLayerDisabled:
+          route3DLayerState.disabled,
+        customLayerError:
+          route3DLayerState.error,
+        moduleLoading:
+          "official maplibre-gl.mjs ES module",
         heightMapReady:
           route3DLayerState.heightMapReady,
         heightMapBounds:
@@ -4000,9 +4118,12 @@
       terrainReady = true;
 
       ensureRouteLayers();
-      ensureRoute3DLayer();
       ensureAircraftProjectionLayer();
       updateGroundRouteVisibility();
+
+      // Add the experimental curtain only after the ordinary map layers and
+      // terrain are alive. Failure here must not take the base map down.
+      safeEnsureRoute3DLayer();
       await ensureAirportLayers();
 
       // Explicitly enable MapLibre's native iPad gestures.
