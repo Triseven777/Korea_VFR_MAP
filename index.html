@@ -1666,9 +1666,9 @@
     // MapLibre's rendered terrain height texture.
     const TOP_VIEW_PITCH_THRESHOLD_DEG = 0.1;
     const CURTAIN_SEGMENT_NM = 0.02; // tessellation only; no CPU DEM lookup
-    const CURTAIN_VERTICAL_INTERVAL_NM = 0.5;
+    const CURTAIN_VERTICAL_INTERVAL_NM = 1.0;
     const AIR_ROUTE_HALF_WIDTH_PX = 3.5; // ~7 px total
-    const CURTAIN_ALPHA = 0.20; // 80% transparency
+    const CURTAIN_ALPHA = 0.30; // 70% transparency
     const HEIGHTMAP_SIZE = 1024;
 
     function compileRoute3DShader(gl, type, source) {
@@ -1956,7 +1956,7 @@
           );
         }
 
-        // Vertical references every 0.5 NM.
+        // Vertical references every 1.0 NM, restarting from each leg start.
         const count = Math.floor(
           distanceNM / CURTAIN_VERTICAL_INTERVAL_NM
         );
@@ -1987,6 +1987,29 @@
             p.x, p.y, p.z, p.airMeters, p.meterScale, 1
           );
         }
+      }
+
+      // Add one vertical reference at EVERY route point.
+      // The per-leg 1 NM spacing above restarts from each route point.
+      for (const point of route) {
+        const altFeet = routePointAltitudeFeet(point);
+        if (altFeet == null) continue;
+
+        const airMeters = altFeet * 0.3048;
+        const p = mercatorData(
+          point.longitude,
+          point.latitude,
+          airMeters
+        );
+
+        pushCurtainVertex(
+          verticalVertices,
+          p.x, p.y, p.z, airMeters, p.meterScale, 0
+        );
+        pushCurtainVertex(
+          verticalVertices,
+          p.x, p.y, p.z, airMeters, p.meterScale, 1
+        );
       }
 
       return {
@@ -2513,15 +2536,27 @@
                         }
             
                         if (topView || route3DLayerState.heightMapReady) {
-                          gl.enable(gl.DEPTH_TEST);
-                          gl.depthFunc(gl.LEQUAL);
+                          // Top view must show the planned MSL route even if
+                          // its altitude is below the terrain (including 0 ft).
+                          if (topView) {
+                            gl.disable(gl.DEPTH_TEST);
+                          } else {
+                            gl.enable(gl.DEPTH_TEST);
+                            gl.depthFunc(gl.LEQUAL);
+                          }
+
                           gl.disable(gl.BLEND);
-            
+
                           gl.drawArrays(
                             gl.TRIANGLES,
                             0,
                             airVertices.length / 8
                           );
+
+                          if (topView) {
+                            gl.enable(gl.DEPTH_TEST);
+                            gl.depthFunc(gl.LEQUAL);
+                          }
                         }
                       }
             
@@ -2546,7 +2581,7 @@
                       gl.depthFunc(gl.LEQUAL);
                       gl.disable(gl.CULL_FACE);
             
-                      // Navy curtain, 80% transparent.
+                      // Navy curtain, 70% transparent.
                       const curtainVertices =
                         route3DLayerState.curtainVertices;
             
@@ -2598,10 +2633,10 @@
             
                         gl.uniform4f(
                           gl.getUniformLocation(curtainProgram, "u_color"),
-                          0.46,
-                          0.62,
-                          0.78,
-                          0.75
+                          1.0,
+                          1.0,
+                          1.0,
+                          0.90
                         );
             
                         gl.enable(gl.BLEND);
@@ -2673,7 +2708,7 @@
           "route-point MSL only; ~7px screen-space ribbon",
         airRouteTopViewAlwaysVisible: true,
         curtain:
-          "navy; 80% transparency (alpha 0.20)",
+          "navy; 70% transparency (alpha 0.30)",
         curtainBottom:
           "MapLibre terrain height map sampled directly in shader",
         verticalLineIntervalNM:
@@ -3270,6 +3305,28 @@
       wrap.appendChild(line);
       wrap.appendChild(bearing);
       return wrap;
+    }
+
+    function syncVisibleRouteAltitudeInputs(fromPointIndex = 0) {
+      const inputs = document.querySelectorAll(
+        ".route-point-altitude-input[data-route-point-id]"
+      );
+
+      inputs.forEach(input => {
+        const pointId = Number(input.dataset.routePointId);
+        const index = route.findIndex(point => point.id === pointId);
+
+        if (index < 0 || index < fromPointIndex) return;
+
+        if (document.activeElement === input) return;
+
+        const altitude = route[index]?.altitudeMslFeet;
+        input.value = Number.isFinite(altitude)
+          ? String(Math.round(altitude))
+          : "0";
+
+        input.classList.remove("invalid");
+      });
     }
 
     function createRoutePointAltitudeControl(point, index) {
