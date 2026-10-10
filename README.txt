@@ -1,44 +1,40 @@
-Korea VFR Moving Map v43
-Fixed DEM Route Terrain Profile
+Korea VFR Moving Map v44
+AGL-Clipped 3D Route Curtain
 
-Problem fixed
-- v42 rebuilt the route curtain geometry inside the custom layer render loop.
-- terrainElevationMeters()/queryTerrainElevation() was therefore called again
-  as the camera moved.
-- MapLibre terrain tile LOD can change with camera position, so the DEM values
-  used by the curtain could change even when the route did not.
+Problem
+- v43 created curtain triangles whenever DEM samples existed.
+- It did not check whether route MSL was actually above terrain.
+- Example: route 0 ft MSL over 500 ft terrain incorrectly created a
+  terrain-to-sea-level curtain.
 
-v43 architecture
-1. Route create/edit/altitude change:
-   - sample DEM profile
-   - convert route MSL exactly with ft * 0.3048
-   - build top line / curtain / drop-line geometry
-   - store all values and geometry in routeTerrainProfileCache
+v44 fix
+1. Curtain rule
+   - AGL = Route MSL - DEM MSL
+   - AGL > 0: curtain visible
+   - AGL <= 0: curtain hidden
 
-2. Camera pan / zoom / pitch:
-   - NEVER resample a complete cached terrain profile
-   - only project and draw the already cached 3D geometry
+2. Terrain crossing
+   - If adjacent samples change AGL sign (+ to - or - to +),
+     v44 calculates the AGL=0 intersection by linear interpolation.
+   - Curtain ends/starts exactly at that intersection.
+   - This prevents a curtain from extending below terrain between samples.
 
-3. DEM still loading:
-   - if any terrain samples are unavailable, cache remains unlocked
-   - map idle may retry sampling
-   - once all required DEM values exist, cache locks
-   - after lock, camera movement cannot alter the terrain heights
+3. Vertical drop lines
+   - visible only when AGL > 0
+   - no drop line is drawn from terrain down to a route below terrain
 
-4. Route change:
-   - cache is intentionally invalidated
-   - a new fixed terrain profile is sampled for the new route revision
+4. Fixed DEM profile from v43 retained
+   - complete DEM cache does not resample due to pan/zoom/pitch
+   - route altitude vertical exaggeration: none
+   - terrain exaggeration: 1
 
-Safety / vertical scale
-- Route altitude vertical exaggeration: NONE
-- Terrain exaggeration: 1
-- Route altitude: FT MSL * 0.3048 = meters MSL
-- Curtain bottom: cached DEM elevation in meters MSL
-- Visual pixel height can still change with camera perspective.
-- The underlying cached MSL/DEM numbers do not change after lock.
+Expected example
+- Route: 0 ft MSL
+- Terrain: +300 ft MSL
+- AGL: -300 ft
+- Curtain: NONE
+- Drop line: NONE
 
-Debug API
+Debug
 - movingMap.getRoute3DAltitudeDiagnostics()
-  Shows cacheLocked, sampledAt, sampledAtZoom, missingTerrainSamples and leg data.
-- movingMap.resampleRouteTerrainProfile()
-  Explicit manual DEM resample if needed.
+  returns curtainRule / terrainIntersectionClipping / dropLineRule

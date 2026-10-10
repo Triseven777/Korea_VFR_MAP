@@ -1760,6 +1760,65 @@
       target.push(xyz[0], xyz[1], xyz[2]);
     }
 
+    function aglMeters(sample) {
+      if (sample?.terrainMeters == null) return null;
+      return sample.altitudeMeters - sample.terrainMeters;
+    }
+
+    function interpolateClippedSample(p0, p1, fraction) {
+      const t = Math.max(0, Math.min(1, fraction));
+
+      const latitude =
+        p0.latitude + (p1.latitude - p0.latitude) * t;
+      const longitude =
+        p0.longitude + (p1.longitude - p0.longitude) * t;
+      const altitudeMeters =
+        p0.altitudeMeters +
+        (p1.altitudeMeters - p0.altitudeMeters) * t;
+      const terrainMeters =
+        p0.terrainMeters +
+        (p1.terrainMeters - p0.terrainMeters) * t;
+      const routeMslFeet =
+        p0.routeMslFeet +
+        (p1.routeMslFeet - p0.routeMslFeet) * t;
+
+      return {
+        t: p0.t + (p1.t - p0.t) * t,
+        latitude,
+        longitude,
+        routeMslFeet,
+        altitudeMeters,
+        terrainMeters,
+        top: mercatorXYZ(longitude, latitude, altitudeMeters),
+        ground: mercatorXYZ(longitude, latitude, terrainMeters)
+      };
+    }
+
+    function aglZeroIntersection(p0, p1) {
+      const a0 = aglMeters(p0);
+      const a1 = aglMeters(p1);
+
+      if (a0 == null || a1 == null) return null;
+      if (a0 === a1) return null;
+
+      const fraction = a0 / (a0 - a1);
+      if (!Number.isFinite(fraction)) return null;
+
+      return interpolateClippedSample(p0, p1, fraction);
+    }
+
+    function appendCurtainQuad(curtainTriangles, p0, p1) {
+      // Only called for a segment where both endpoints are at/above terrain
+      // after clipping. p0/p1 ground positions are exact DEM MSL positions.
+      pushXYZ(curtainTriangles, p0.top);
+      pushXYZ(curtainTriangles, p0.ground);
+      pushXYZ(curtainTriangles, p1.top);
+
+      pushXYZ(curtainTriangles, p1.top);
+      pushXYZ(curtainTriangles, p0.ground);
+      pushXYZ(curtainTriangles, p1.ground);
+    }
+
     function buildAndCacheRouteTerrainProfile() {
       const topLines = [];
       const curtainTriangles = [];
@@ -1844,19 +1903,50 @@
           pushXYZ(topLines, samples[s + 1].top);
         }
 
-        // Curtain bottom is built from the FIXED cached DEM samples.
+        // Curtain exists ONLY where route altitude is above terrain.
+        // When AGL changes sign between two DEM samples, clip exactly at AGL=0
+        // so the curtain starts/ends at the terrain intersection rather than
+        // extending below terrain.
         for (let s = 0; s < samples.length - 1; s++) {
           const p0 = samples[s];
           const p1 = samples[s + 1];
-          if (!p0.ground || !p1.ground) continue;
 
-          pushXYZ(curtainTriangles, p0.top);
-          pushXYZ(curtainTriangles, p0.ground);
-          pushXYZ(curtainTriangles, p1.top);
+          if (
+            p0.terrainMeters == null ||
+            p1.terrainMeters == null ||
+            !p0.ground ||
+            !p1.ground
+          ) {
+            continue;
+          }
 
-          pushXYZ(curtainTriangles, p1.top);
-          pushXYZ(curtainTriangles, p0.ground);
-          pushXYZ(curtainTriangles, p1.ground);
+          const agl0 = aglMeters(p0);
+          const agl1 = aglMeters(p1);
+
+          if (agl0 == null || agl1 == null) continue;
+
+          // Fully above terrain.
+          if (agl0 > 0 && agl1 > 0) {
+            appendCurtainQuad(curtainTriangles, p0, p1);
+            continue;
+          }
+
+          // Fully at/below terrain: no curtain.
+          if (agl0 <= 0 && agl1 <= 0) {
+            continue;
+          }
+
+          // Crosses terrain between samples.
+          const intersection = aglZeroIntersection(p0, p1);
+          if (!intersection) continue;
+
+          if (agl0 > 0 && agl1 <= 0) {
+            // Curtain ends at terrain intersection.
+            appendCurtainQuad(curtainTriangles, p0, intersection);
+          } else if (agl0 <= 0 && agl1 > 0) {
+            // Curtain starts at terrain intersection.
+            appendCurtainQuad(curtainTriangles, intersection, p1);
+          }
         }
 
         // Drop lines also sample DEM once and become part of the fixed cache.
@@ -1890,19 +1980,26 @@
             continue;
           }
 
-          const top = mercatorXYZ(
-            ll.longitude,
-            ll.latitude,
-            altitudeMeters
-          );
-          const ground = mercatorXYZ(
-            ll.longitude,
-            ll.latitude,
-            terrainMeters
-          );
+          const aglMetersValue = altitudeMeters - terrainMeters;
+          const aglFeetValue = altitudeFeet - terrainMeters * 3.28084;
 
-          pushXYZ(dropLines, top);
-          pushXYZ(dropLines, ground);
+          // A vertical drop line is meaningful only when the planned route is
+          // physically above the terrain.
+          if (aglMetersValue > 0) {
+            const top = mercatorXYZ(
+              ll.longitude,
+              ll.latitude,
+              altitudeMeters
+            );
+            const ground = mercatorXYZ(
+              ll.longitude,
+              ll.latitude,
+              terrainMeters
+            );
+
+            pushXYZ(dropLines, top);
+            pushXYZ(dropLines, ground);
+          }
 
           dropSamples.push({
             distanceNM: dNM,
@@ -1911,7 +2008,8 @@
             longitude: ll.longitude,
             routeMslFeet: altitudeFeet,
             terrainMslFeet: terrainMeters * 3.28084,
-            aglFeet: altitudeFeet - terrainMeters * 3.28084
+            aglFeet: aglFeetValue,
+            dropLineVisible: aglMetersValue > 0
           });
         }
 
@@ -2059,6 +2157,9 @@
           routeTerrainProfileCache.missingTerrainSamples,
         sampledAt: routeTerrainProfileCache.sampledAt,
         sampledAtZoom: routeTerrainProfileCache.sampledAtZoom,
+        curtainRule: "visible only where AGL > 0",
+        terrainIntersectionClipping: "linear interpolation at AGL = 0",
+        dropLineRule: "visible only where AGL > 0",
         note:
           "Once cacheLocked=true, pan/zoom/pitch changes only camera projection. " +
           "They do not change the MSL/DEM values used by the route curtain.",
