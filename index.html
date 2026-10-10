@@ -1632,6 +1632,7 @@
     function emptyRoute3DGeometry() {
       return {
         topLines: new Float32Array(),
+        groundLines: new Float32Array(),
         curtainTriangles: new Float32Array(),
         dropLines: new Float32Array()
       };
@@ -1821,6 +1822,7 @@
 
     function buildAndCacheRouteTerrainProfile() {
       const topLines = [];
+      const groundLines = [];
       const curtainTriangles = [];
       const dropLines = [];
       const cachedLegs = [];
@@ -1901,6 +1903,20 @@
         for (let s = 0; s < samples.length - 1; s++) {
           pushXYZ(topLines, samples[s].top);
           pushXYZ(topLines, samples[s + 1].top);
+        }
+
+        // Ground reference route uses the EXACT SAME cached DEM samples as
+        // the curtain bottom. This replaces the old MapLibre style-line route,
+        // so ground line and curtain now share one 3D coordinate system and
+        // one custom-layer projection matrix.
+        for (let s = 0; s < samples.length - 1; s++) {
+          const p0 = samples[s];
+          const p1 = samples[s + 1];
+
+          if (!p0.ground || !p1.ground) continue;
+
+          pushXYZ(groundLines, p0.ground);
+          pushXYZ(groundLines, p1.ground);
         }
 
         // Curtain exists ONLY where route altitude is above terrain.
@@ -2041,6 +2057,7 @@
 
       const geometry = {
         topLines: new Float32Array(topLines),
+        groundLines: new Float32Array(groundLines),
         curtainTriangles: new Float32Array(curtainTriangles),
         dropLines: new Float32Array(dropLines)
       };
@@ -2160,6 +2177,9 @@
         curtainRule: "visible only where AGL > 0",
         terrainIntersectionClipping: "linear interpolation at AGL = 0",
         dropLineRule: "visible only where AGL > 0",
+        groundRouteRendering: "custom 3D layer using same cached DEM samples",
+        sharedProjectionMatrix: true,
+        oldStyleGroundRouteVisible: false,
         note:
           "Once cacheLocked=true, pan/zoom/pitch changes only camera projection. " +
           "They do not change the MSL/DEM values used by the route curtain.",
@@ -2269,6 +2289,22 @@
               [0.08, 0.55, 0.95, 0.22]
             );
             gl.depthMask(true);
+          }
+
+          // Ground reference route: exact cached DEM coordinates.
+          // It shares the same projection matrix as the curtain/top route.
+          if (geometry.groundLines.length >= 6) {
+            gl.disable(gl.BLEND);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthFunc(gl.LEQUAL);
+            gl.lineWidth(2.5);
+            drawRoute3DGeometry(
+              gl,
+              geometry.groundLines,
+              gl.LINES,
+              matrix,
+              [1.0, 1.0, 1.0, 1.0]
+            );
           }
 
           // Vertical DEM drop lines.
@@ -3085,6 +3121,9 @@
           }
         });
 
+        // Visual ground route is rendered by the 3D custom layer.
+        // Keep this style line invisible only to preserve route-source based
+        // interaction infrastructure and layer ordering.
         map.addLayer({
           id: "route-line",
           type: "line",
@@ -3092,7 +3131,7 @@
           paint: {
             "line-color": "#ffffff",
             "line-width": 2.5,
-            "line-opacity": 0.96
+            "line-opacity": 0
           }
         });
 

@@ -1,40 +1,31 @@
-Korea VFR Moving Map v44
-AGL-Clipped 3D Route Curtain
+Korea VFR Moving Map v45
+Unified 3D Ground Route Projection
 
-Problem
-- v43 created curtain triangles whenever DEM samples existed.
-- It did not check whether route MSL was actually above terrain.
-- Example: route 0 ft MSL over 500 ft terrain incorrectly created a
-  terrain-to-sea-level curtain.
+Problem addressed
+- The white ground route used MapLibre's normal style 'line' layer.
+- The blue curtain/top route used a WebGL custom 3D layer.
+- Those two render paths could visually diverge under pitched camera movement.
 
-v44 fix
-1. Curtain rule
-   - AGL = Route MSL - DEM MSL
-   - AGL > 0: curtain visible
-   - AGL <= 0: curtain hidden
+v45 change
+- The visible white ground route is now generated from the EXACT SAME cached
+  DEM samples used as the curtain bottom.
+- White ground line, blue curtain, drop lines, and MSL top route are all drawn
+  inside the same custom 3D layer.
+- They all use the same custom-layer projection matrix.
+- The old style route-line remains invisible only because its GeoJSON source
+  is still useful for the 32 px route-hit editing layer.
 
-2. Terrain crossing
-   - If adjacent samples change AGL sign (+ to - or - to +),
-     v44 calculates the AGL=0 intersection by linear interpolation.
-   - Curtain ends/starts exactly at that intersection.
-   - This prevents a curtain from extending below terrain between samples.
+Vertical / DEM rules retained
+- Route MSL = ft * 0.3048
+- Terrain exaggeration = 1
+- Fixed DEM cache from v43 retained
+- AGL clipping from v44 retained
+- Curtain only where AGL > 0
+- AGL=0 crossing interpolation retained
+- Drop line only where AGL > 0
 
-3. Vertical drop lines
-   - visible only when AGL > 0
-   - no drop line is drawn from terrain down to a route below terrain
-
-4. Fixed DEM profile from v43 retained
-   - complete DEM cache does not resample due to pan/zoom/pitch
-   - route altitude vertical exaggeration: none
-   - terrain exaggeration: 1
-
-Expected example
-- Route: 0 ft MSL
-- Terrain: +300 ft MSL
-- AGL: -300 ft
-- Curtain: NONE
-- Drop line: NONE
-
-Debug
-- movingMap.getRoute3DAltitudeDiagnostics()
-  returns curtainRule / terrainIntersectionClipping / dropLineRule
+Diagnostic
+movingMap.getRoute3DAltitudeDiagnostics()
+- groundRouteRendering
+- sharedProjectionMatrix = true
+- oldStyleGroundRouteVisible = false
