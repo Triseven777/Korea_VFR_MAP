@@ -1,48 +1,14 @@
-Korea VFR Moving Map v46
-3D curtain logic fully rebuilt from scratch
+Korea VFR Moving Map v47
+MapLibre Terrain Height-Map Curtain
 
-Rules implemented
-1. Previous 3D curtain geometry logic discarded.
-
-2. Ground route
-- white
-- 1 pt requested
-- follows DEM terrain surface
-- represents ground/AGL reference route
-
-3. Air route
-- magenta
-- 3 pt requested
-- uses planned MSL altitude
-- visible only where planned MSL is above DEM terrain
-
-4. Curtain
-- blue
-- 70% opacity
-- connects air route to ground route
-- visible only where AGL > 0
-
-5. Terrain above planned MSL
-- only ground route remains
-- no air route
-- no curtain
-- AGL=0 intersection is clipped at the crossing point
-
-6. Top view
-- pitch <= 0.1 deg
-- render air route only
-- ground route and curtain are not rendered
-
-7. Pitched view
-- pitch > 0.1 deg
-- ground route + curtain + air route rendered
-
-Vertical scale
-- route MSL: feet * 0.3048
-- terrain: DEM queryTerrainElevation
-- terrain exaggeration: 1
-- route vertical exaggeration: none
-
-Notes
-- WebGL lineWidth(3) is requested for the magenta route.
-  Actual hardware/browser line-width support may vary.
+- MapLibre GL JS upgraded from 4.7.1 to 6.13.0.
+- White ground route: MapLibre terrain-draped line, 1 px.
+- Magenta airborne route: route-point MSL only, thick ~7 px ribbon.
+- Navy curtain: 80% transparent (alpha 0.20).
+- Curtain lower edge: MapLibre renderTerrainHeightMap texture sampled in shader.
+- No CPU queryTerrainElevation sampling is used to construct the curtain.
+- Vertical reference lines every 0.5 NM.
+- Top view: magenta air route always visible; ground route/curtain hidden.
+- Pitched view: ground route + curtain + air route.
+- Short route-line tap: no action.
+- VIA insertion requires actual drag (touch >=12 px, mouse >=6 px).

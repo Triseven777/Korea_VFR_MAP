@@ -6,7 +6,7 @@
   <title>Korea VFR Moving Map - v6 Route Drag</title>
 
   <link
-    href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css"
+    href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
     rel="stylesheet"
   />
 
@@ -978,7 +978,7 @@
   </div>
 
 
-  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.js"></script>
 
   <script type="module">
   (async () => {
@@ -1606,25 +1606,29 @@
 
 
     const route3DLayerState = {
-      program: null,
-      buffer: null,
-      aPosition: -1,
-      uMatrix: null,
-      uColor: null
+      curtainProgram: null,
+      airProgram: null,
+      curtainBuffer: null,
+      verticalBuffer: null,
+      airBuffer: null,
+      heightMap: null,
+      heightMapReady: false,
+      bounds: null,
+      routeSignature: null,
+      curtainVertices: new Float32Array(),
+      verticalVertices: new Float32Array(),
+      airVertices: new Float32Array()
     };
 
-    // Rebuilt v46 3D route visualization.
-    // No previous curtain geometry logic is reused.
-    const ROUTE_TERRAIN_SAMPLE_NM = 0.25;
+    // v47 terrain-height-map architecture.
+    // Terrain heights for the curtain are sampled by the GPU directly from
+    // MapLibre's rendered terrain height texture.
     const TOP_VIEW_PITCH_THRESHOLD_DEG = 0.1;
-
-    let route3DProfileCache = {
-      signature: null,
-      samplesByLeg: [],
-      missingTerrainSamples: 0,
-      locked: false,
-      sampledAt: null
-    };
+    const CURTAIN_SEGMENT_NM = 0.02; // tessellation only; no CPU DEM lookup
+    const CURTAIN_VERTICAL_INTERVAL_NM = 0.5;
+    const AIR_ROUTE_HALF_WIDTH_PX = 3.5; // ~7 px total
+    const CURTAIN_ALPHA = 0.20; // 80% transparency
+    const HEIGHTMAP_SIZE = 1024;
 
     function compileRoute3DShader(gl, type, source) {
       const shader = gl.createShader(type);
@@ -1632,11 +1636,37 @@
       gl.compileShader(shader);
 
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        const message = gl.getShaderInfoLog(shader) || "Unknown shader compile error";
+        const message =
+          gl.getShaderInfoLog(shader) ||
+          "Unknown shader compile error";
         gl.deleteShader(shader);
         throw new Error(message);
       }
+
       return shader;
+    }
+
+    function linkRoute3DProgram(gl, vertexSource, fragmentSource) {
+      const vs = compileRoute3DShader(gl, gl.VERTEX_SHADER, vertexSource);
+      const fs = compileRoute3DShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+
+      const program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        const message =
+          gl.getProgramInfoLog(program) ||
+          "Unknown route 3D program link error";
+        gl.deleteProgram(program);
+        throw new Error(message);
+      }
+
+      return program;
     }
 
     function routePointAltitudeFeet(point) {
@@ -1659,6 +1689,7 @@
       }
 
       const altitude = Number(value);
+
       if (!Number.isFinite(altitude) || altitude < 0 || altitude > 60000) {
         if (inputElement) inputElement.classList.add("invalid");
         return false;
@@ -1671,7 +1702,7 @@
       if (inputElement) inputElement.classList.remove("invalid");
 
       syncVisibleRouteAltitudeInputs(pointIndex + 1);
-      invalidateRoute3DProfile();
+      invalidateRoute3DGeometry();
       refreshRoute3D();
 
       if (rerender) updateRouteInfo();
@@ -1682,6 +1713,7 @@
       if (fraction <= 0) {
         return { latitude: a.latitude, longitude: a.longitude };
       }
+
       if (fraction >= 1) {
         return { latitude: b.latitude, longitude: b.longitude };
       }
@@ -1697,19 +1729,26 @@
       );
     }
 
-    function mercatorXYZ(longitude, latitude, altitudeMeters) {
-      const c = maplibregl.MercatorCoordinate.fromLngLat(
+    function mercatorData(longitude, latitude, altitudeMeters = 0) {
+      const merc = maplibregl.MercatorCoordinate.fromLngLat(
         { lng: Number(longitude), lat: Number(latitude) },
         Number(altitudeMeters)
       );
-      return [c.x, c.y, c.z];
+
+      const ground = maplibregl.MercatorCoordinate.fromLngLat(
+        { lng: Number(longitude), lat: Number(latitude) },
+        0
+      );
+
+      return {
+        x: merc.x,
+        y: merc.y,
+        z: merc.z,
+        meterScale: ground.meterInMercatorCoordinateUnits()
+      };
     }
 
-    function pushXYZ(target, xyz) {
-      target.push(xyz[0], xyz[1], xyz[2]);
-    }
-
-    function route3DSignature() {
+    function routeGeometrySignature() {
       return JSON.stringify(
         route.map(point => [
           point.id,
@@ -1720,319 +1759,334 @@
       );
     }
 
-    function invalidateRoute3DProfile() {
-      route3DProfileCache = {
-        signature: null,
-        samplesByLeg: [],
-        missingTerrainSamples: 0,
-        locked: false,
-        sampledAt: null
-      };
+    function invalidateRoute3DGeometry() {
+      route3DLayerState.routeSignature = null;
+      route3DLayerState.bounds = null;
+      route3DLayerState.heightMapReady = false;
     }
 
-    function buildRoute3DProfile() {
-      const signature = route3DSignature();
-      const samplesByLeg = [];
-      let missingTerrainSamples = 0;
+    function pushCurtainVertex(
+      target,
+      x,
+      y,
+      airZ,
+      airMeters,
+      meterScale,
+      groundFlag
+    ) {
+      target.push(
+        x,
+        y,
+        airZ,
+        airMeters,
+        meterScale,
+        groundFlag
+      );
+    }
 
+    function pushAirRibbonVertex(target, base, other, side, airMeters) {
+      target.push(
+        base.x,
+        base.y,
+        base.z,
+        other.x,
+        other.y,
+        other.z,
+        side,
+        airMeters
+      );
+    }
+
+    function buildAirRibbonGeometry() {
+      const vertices = [];
+
+      // Only route points + their MSL values define the magenta route.
       for (let i = 0; i < route.length - 1; i++) {
         const a = route[i];
         const b = route[i + 1];
+
         const altAFeet = routePointAltitudeFeet(a);
         const altBFeet = routePointAltitudeFeet(b);
 
         if (altAFeet == null || altBFeet == null) continue;
 
-        const distanceMeters = gcDistanceMeters(a, b);
-        const distanceNM = distanceMeters / M_PER_NM;
+        const altAMeters = altAFeet * 0.3048;
+        const altBMeters = altBFeet * 0.3048;
 
-        const sampleCount = Math.max(
+        const p = mercatorData(
+          a.longitude,
+          a.latitude,
+          altAMeters
+        );
+        const q = mercatorData(
+          b.longitude,
+          b.latitude,
+          altBMeters
+        );
+
+        // Two triangles per route segment; shader extrudes in screen space.
+        pushAirRibbonVertex(vertices, p, q, -1, altAMeters);
+        pushAirRibbonVertex(vertices, p, q, +1, altAMeters);
+        pushAirRibbonVertex(vertices, q, p, +1, altBMeters);
+
+        pushAirRibbonVertex(vertices, p, q, -1, altAMeters);
+        pushAirRibbonVertex(vertices, q, p, +1, altBMeters);
+        pushAirRibbonVertex(vertices, q, p, -1, altBMeters);
+      }
+
+      return new Float32Array(vertices);
+    }
+
+    function buildCurtainGeometry() {
+      const curtainVertices = [];
+      const verticalVertices = [];
+
+      for (let i = 0; i < route.length - 1; i++) {
+        const a = route[i];
+        const b = route[i + 1];
+
+        const altAFeet = routePointAltitudeFeet(a);
+        const altBFeet = routePointAltitudeFeet(b);
+
+        if (altAFeet == null || altBFeet == null) continue;
+
+        const distanceNM = gcDistanceMeters(a, b) / M_PER_NM;
+
+        const segmentCount = Math.max(
           1,
           Math.min(
-            512,
-            Math.ceil(distanceNM / ROUTE_TERRAIN_SAMPLE_NM)
+            4096,
+            Math.ceil(distanceNM / CURTAIN_SEGMENT_NM)
           )
         );
 
         const samples = [];
 
-        for (let s = 0; s <= sampleCount; s++) {
-          const fraction = s / sampleCount;
-          const ll = interpolateRouteLocation(a, b, fraction);
+        for (let s = 0; s <= segmentCount; s++) {
+          const t = s / segmentCount;
+          const ll = interpolateRouteLocation(a, b, t);
 
-          const routeMslFeet =
-            altAFeet + (altBFeet - altAFeet) * fraction;
-          const routeMslMeters = routeMslFeet * 0.3048;
+          const airFeet =
+            altAFeet + (altBFeet - altAFeet) * t;
+          const airMeters = airFeet * 0.3048;
 
-          const terrainMslMeters = terrainElevationMeters(
+          const m = mercatorData(
+            ll.longitude,
             ll.latitude,
-            ll.longitude
+            airMeters
           );
 
-          if (terrainMslMeters == null) {
-            missingTerrainSamples += 1;
-          }
-
           samples.push({
-            fraction,
-            latitude: ll.latitude,
-            longitude: ll.longitude,
-            routeMslFeet,
-            routeMslMeters,
-            terrainMslMeters,
-            aglMeters:
-              terrainMslMeters == null
-                ? null
-                : routeMslMeters - terrainMslMeters
+            ...m,
+            airMeters
           });
         }
 
-        samplesByLeg.push({
-          legIndex: i,
-          samples
-        });
-      }
+        for (let s = 0; s < samples.length - 1; s++) {
+          const p = samples[s];
+          const q = samples[s + 1];
 
-      route3DProfileCache = {
-        signature,
-        samplesByLeg,
-        missingTerrainSamples,
-        locked: missingTerrainSamples === 0,
-        sampledAt: new Date().toISOString()
-      };
-
-      return route3DProfileCache;
-    }
-
-    function ensureRoute3DProfile() {
-      const signature = route3DSignature();
-
-      if (
-        route3DProfileCache.signature !== signature ||
-        route3DProfileCache.samplesByLeg.length === 0
-      ) {
-        return buildRoute3DProfile();
-      }
-
-      return route3DProfileCache;
-    }
-
-    function sampleTo3D(sample) {
-      if (sample.terrainMslMeters == null) return null;
-
-      return {
-        air: mercatorXYZ(
-          sample.longitude,
-          sample.latitude,
-          sample.routeMslMeters
-        ),
-        ground: mercatorXYZ(
-          sample.longitude,
-          sample.latitude,
-          sample.terrainMslMeters
-        )
-      };
-    }
-
-    function interpolateProfileSample(a, b, t) {
-      const f = Math.max(0, Math.min(1, t));
-
-      const latitude = a.latitude + (b.latitude - a.latitude) * f;
-      const longitude = a.longitude + (b.longitude - a.longitude) * f;
-      const routeMslFeet =
-        a.routeMslFeet + (b.routeMslFeet - a.routeMslFeet) * f;
-      const routeMslMeters =
-        a.routeMslMeters + (b.routeMslMeters - a.routeMslMeters) * f;
-      const terrainMslMeters =
-        a.terrainMslMeters +
-        (b.terrainMslMeters - a.terrainMslMeters) * f;
-
-      return {
-        fraction: a.fraction + (b.fraction - a.fraction) * f,
-        latitude,
-        longitude,
-        routeMslFeet,
-        routeMslMeters,
-        terrainMslMeters,
-        aglMeters: routeMslMeters - terrainMslMeters
-      };
-    }
-
-    function terrainIntersectionSample(a, b) {
-      if (
-        a.aglMeters == null ||
-        b.aglMeters == null ||
-        a.aglMeters === b.aglMeters
-      ) {
-        return null;
-      }
-
-      const t = a.aglMeters / (a.aglMeters - b.aglMeters);
-
-      if (!Number.isFinite(t) || t < 0 || t > 1) {
-        return null;
-      }
-
-      return interpolateProfileSample(a, b, t);
-    }
-
-    function appendLineSegment(target, p0, p1) {
-      pushXYZ(target, p0);
-      pushXYZ(target, p1);
-    }
-
-    function appendCurtainQuad(target, a, b) {
-      const a3 = sampleTo3D(a);
-      const b3 = sampleTo3D(b);
-      if (!a3 || !b3) return;
-
-      pushXYZ(target, a3.air);
-      pushXYZ(target, a3.ground);
-      pushXYZ(target, b3.air);
-
-      pushXYZ(target, b3.air);
-      pushXYZ(target, a3.ground);
-      pushXYZ(target, b3.ground);
-    }
-
-    function buildFreshRoute3DGeometry() {
-      const profile = ensureRoute3DProfile();
-
-      const airLines = [];
-      const groundLines = [];
-      const curtainTriangles = [];
-
-      for (const leg of profile.samplesByLeg) {
-        const samples = leg.samples;
-
-        for (let i = 0; i < samples.length - 1; i++) {
-          const a = samples[i];
-          const b = samples[i + 1];
-
-          if (
-            a.terrainMslMeters == null ||
-            b.terrainMslMeters == null
-          ) {
-            continue;
-          }
-
-          const a3 = sampleTo3D(a);
-          const b3 = sampleTo3D(b);
-          if (!a3 || !b3) continue;
-
-          // Ground route ALWAYS follows the DEM surface.
-          appendLineSegment(
-            groundLines,
-            a3.ground,
-            b3.ground
+          // Triangle 1: P-air, P-ground, Q-air
+          pushCurtainVertex(
+            curtainVertices,
+            p.x, p.y, p.z, p.airMeters, p.meterScale, 0
+          );
+          pushCurtainVertex(
+            curtainVertices,
+            p.x, p.y, p.z, p.airMeters, p.meterScale, 1
+          );
+          pushCurtainVertex(
+            curtainVertices,
+            q.x, q.y, q.z, q.airMeters, q.meterScale, 0
           );
 
-          // Air route / curtain only exist where MSL route is above terrain.
-          const aAbove = a.aglMeters > 0;
-          const bAbove = b.aglMeters > 0;
+          // Triangle 2: Q-air, P-ground, Q-ground
+          pushCurtainVertex(
+            curtainVertices,
+            q.x, q.y, q.z, q.airMeters, q.meterScale, 0
+          );
+          pushCurtainVertex(
+            curtainVertices,
+            p.x, p.y, p.z, p.airMeters, p.meterScale, 1
+          );
+          pushCurtainVertex(
+            curtainVertices,
+            q.x, q.y, q.z, q.airMeters, q.meterScale, 1
+          );
+        }
 
-          if (aAbove && bAbove) {
-            appendLineSegment(
-              airLines,
-              a3.air,
-              b3.air
-            );
+        // Vertical references every 0.5 NM.
+        const count = Math.floor(
+          distanceNM / CURTAIN_VERTICAL_INTERVAL_NM
+        );
 
-            appendCurtainQuad(
-              curtainTriangles,
-              a,
-              b
-            );
-            continue;
-          }
+        for (let v = 1; v <= count; v++) {
+          const dNM = v * CURTAIN_VERTICAL_INTERVAL_NM;
+          if (dNM >= distanceNM - 1e-6) continue;
 
-          // Entire segment is at/below terrain:
-          // ground route only.
-          if (!aAbove && !bAbove) {
-            continue;
-          }
+          const t = distanceNM > 0 ? dNM / distanceNM : 0;
+          const ll = interpolateRouteLocation(a, b, t);
 
-          // Segment crosses terrain. Clip air route and curtain at AGL=0.
-          const crossing = terrainIntersectionSample(a, b);
-          if (!crossing) continue;
+          const airFeet =
+            altAFeet + (altBFeet - altAFeet) * t;
+          const airMeters = airFeet * 0.3048;
 
-          const c3 = sampleTo3D(crossing);
-          if (!c3) continue;
+          const p = mercatorData(
+            ll.longitude,
+            ll.latitude,
+            airMeters
+          );
 
-          if (aAbove) {
-            appendLineSegment(
-              airLines,
-              a3.air,
-              c3.air
-            );
-
-            appendCurtainQuad(
-              curtainTriangles,
-              a,
-              crossing
-            );
-          } else {
-            appendLineSegment(
-              airLines,
-              c3.air,
-              b3.air
-            );
-
-            appendCurtainQuad(
-              curtainTriangles,
-              crossing,
-              b
-            );
-          }
+          pushCurtainVertex(
+            verticalVertices,
+            p.x, p.y, p.z, p.airMeters, p.meterScale, 0
+          );
+          pushCurtainVertex(
+            verticalVertices,
+            p.x, p.y, p.z, p.airMeters, p.meterScale, 1
+          );
         }
       }
 
       return {
-        airLines: new Float32Array(airLines),
-        groundLines: new Float32Array(groundLines),
-        curtainTriangles: new Float32Array(curtainTriangles)
+        curtain: new Float32Array(curtainVertices),
+        vertical: new Float32Array(verticalVertices)
       };
     }
 
-    function drawRoute3DGeometry(
-      gl,
-      vertices,
-      mode,
-      matrix,
-      color,
-      lineWidth = 1
-    ) {
-      if (!vertices || vertices.length < 3) return;
+    function buildTerrainHeightMapBounds() {
+      if (route.length < 2) return null;
 
-      const state = route3DLayerState;
+      const coords = route.map(point =>
+        mercatorData(point.longitude, point.latitude, 0)
+      );
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, state.buffer);
+      let minX = Math.min(...coords.map(p => p.x));
+      let maxX = Math.max(...coords.map(p => p.x));
+      let minY = Math.min(...coords.map(p => p.y));
+      let maxY = Math.max(...coords.map(p => p.y));
+
+      const spanX = maxX - minX;
+      const spanY = maxY - minY;
+
+      const mid = route[Math.floor(route.length / 2)];
+      const meterScale =
+        maplibregl.MercatorCoordinate
+          .fromLngLat([mid.longitude, mid.latitude])
+          .meterInMercatorCoordinateUnits();
+
+      const padX = Math.max(500 * meterScale, spanX * 0.10);
+      const padY = Math.max(500 * meterScale, spanY * 0.10);
+
+      return [
+        minX - padX,
+        minY - padY,
+        maxX + padX,
+        maxY + padY
+      ];
+    }
+
+    function rebuildRoute3DGeometryIfNeeded() {
+      const signature = routeGeometrySignature();
+
+      if (route3DLayerState.routeSignature === signature) return;
+
+      const curtain = buildCurtainGeometry();
+
+      route3DLayerState.curtainVertices = curtain.curtain;
+      route3DLayerState.verticalVertices = curtain.vertical;
+      route3DLayerState.airVertices = buildAirRibbonGeometry();
+      route3DLayerState.bounds = buildTerrainHeightMapBounds();
+      route3DLayerState.routeSignature = signature;
+      route3DLayerState.heightMapReady = false;
+    }
+
+    function bindCurtainAttributes(gl, program, buffer, vertices) {
+      const stride = 6 * Float32Array.BYTES_PER_ELEMENT;
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
 
-      gl.enableVertexAttribArray(state.aPosition);
-      gl.vertexAttribPointer(
-        state.aPosition,
-        3,
-        gl.FLOAT,
-        false,
-        0,
+      const specs = [
+        ["a_xy", 2, 0],
+        ["a_air_z", 1, 2],
+        ["a_air_meters", 1, 3],
+        ["a_meter_scale", 1, 4],
+        ["a_ground_flag", 1, 5]
+      ];
+
+      for (const [name, size, offset] of specs) {
+        const loc = gl.getAttribLocation(program, name);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(
+          loc,
+          size,
+          gl.FLOAT,
+          false,
+          stride,
+          offset * Float32Array.BYTES_PER_ELEMENT
+        );
+      }
+    }
+
+    function bindAirRibbonAttributes(gl, program, vertices) {
+      const stride = 8 * Float32Array.BYTES_PER_ELEMENT;
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, route3DLayerState.airBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
+
+      const specs = [
+        ["a_pos", 3, 0],
+        ["a_other", 3, 3],
+        ["a_side", 1, 6],
+        ["a_air_meters", 1, 7]
+      ];
+
+      for (const [name, size, offset] of specs) {
+        const loc = gl.getAttribLocation(program, name);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(
+          loc,
+          size,
+          gl.FLOAT,
+          false,
+          stride,
+          offset * Float32Array.BYTES_PER_ELEMENT
+        );
+      }
+    }
+
+    function bindTerrainHeightMap(gl, program) {
+      const bounds = route3DLayerState.bounds;
+      if (!bounds || !route3DLayerState.heightMap) return false;
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, route3DLayerState.heightMap);
+
+      gl.uniform1i(
+        gl.getUniformLocation(program, "u_height_map"),
         0
       );
 
-      gl.uniformMatrix4fv(state.uMatrix, false, matrix);
-      gl.uniform4f(
-        state.uColor,
-        color[0],
-        color[1],
-        color[2],
-        color[3]
+      gl.uniform4fv(
+        gl.getUniformLocation(program, "u_height_bounds"),
+        bounds
       );
 
-      if (mode === gl.LINES) {
-        gl.lineWidth(lineWidth);
-      }
+      return true;
+    }
 
-      gl.drawArrays(mode, 0, vertices.length / 3);
+    function updateGroundRouteVisibility() {
+      if (!map.getLayer("route-line")) return;
+
+      const topView =
+        map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG;
+
+      map.setPaintProperty(
+        "route-line",
+        "line-opacity",
+        topView ? 0 : 1
+      );
     }
 
     function ensureRoute3DLayer() {
@@ -2044,223 +2098,493 @@
         renderingMode: "3d",
 
         onAdd(mapInstance, gl) {
-          const vertexSource = `
+          gl.getExtension("EXT_color_buffer_float");
+
+          const curtainVertex = `#version 300 es
             precision highp float;
+
             uniform mat4 u_matrix;
-            attribute vec3 a_position;
+            uniform sampler2D u_height_map;
+            uniform vec4 u_height_bounds;
+
+            in vec2 a_xy;
+            in float a_air_z;
+            in float a_air_meters;
+            in float a_meter_scale;
+            in float a_ground_flag;
+
+            out vec2 v_mercator;
+            out float v_air_meters;
+
+            vec4 terrainSample(vec2 xy) {
+              vec2 uv =
+                (xy - u_height_bounds.xy) /
+                (u_height_bounds.zw - u_height_bounds.xy);
+
+              return texture(
+                u_height_map,
+                vec2(uv.x, 1.0 - uv.y)
+              );
+            }
 
             void main() {
-              gl_Position = u_matrix * vec4(a_position, 1.0);
+              vec4 terrain = terrainSample(a_xy);
+              float groundZ = terrain.r * a_meter_scale;
+
+              float z = mix(
+                a_air_z,
+                groundZ,
+                a_ground_flag
+              );
+
+              gl_Position =
+                u_matrix * vec4(a_xy, z, 1.0);
+
+              v_mercator = a_xy;
+              v_air_meters = a_air_meters;
             }
           `;
 
-          const fragmentSource = `
-            precision mediump float;
+          const curtainFragment = `#version 300 es
+            precision highp float;
+
+            uniform sampler2D u_height_map;
+            uniform vec4 u_height_bounds;
             uniform vec4 u_color;
 
+            in vec2 v_mercator;
+            in float v_air_meters;
+
+            out vec4 fragColor;
+
+            vec4 terrainSample(vec2 xy) {
+              vec2 uv =
+                (xy - u_height_bounds.xy) /
+                (u_height_bounds.zw - u_height_bounds.xy);
+
+              return texture(
+                u_height_map,
+                vec2(uv.x, 1.0 - uv.y)
+              );
+            }
+
             void main() {
-              gl_FragColor = u_color;
+              vec4 terrain = terrainSample(v_mercator);
+
+              if (terrain.a < 0.5) discard;
+
+              // In pitched view, curtain/vertical references exist only
+              // where planned MSL is above terrain.
+              if (v_air_meters <= terrain.r) discard;
+
+              fragColor = u_color;
             }
           `;
 
-          const vs = compileRoute3DShader(
-            gl,
-            gl.VERTEX_SHADER,
-            vertexSource
+          const airVertex = `#version 300 es
+            precision highp float;
+
+            uniform mat4 u_matrix;
+            uniform vec2 u_viewport;
+            uniform float u_half_width_px;
+
+            in vec3 a_pos;
+            in vec3 a_other;
+            in float a_side;
+            in float a_air_meters;
+
+            out vec2 v_mercator;
+            out float v_air_meters;
+
+            void main() {
+              vec4 clip =
+                u_matrix * vec4(a_pos, 1.0);
+              vec4 otherClip =
+                u_matrix * vec4(a_other, 1.0);
+
+              vec2 ndc = clip.xy / clip.w;
+              vec2 otherNdc =
+                otherClip.xy / otherClip.w;
+
+              vec2 px =
+                (ndc * 0.5 + 0.5) * u_viewport;
+              vec2 otherPx =
+                (otherNdc * 0.5 + 0.5) * u_viewport;
+
+              vec2 delta = otherPx - px;
+              float len = length(delta);
+              vec2 dir =
+                len > 0.001
+                  ? delta / len
+                  : vec2(1.0, 0.0);
+
+              vec2 normal = vec2(-dir.y, dir.x);
+              vec2 offsetPx =
+                normal * u_half_width_px * a_side;
+              vec2 offsetNdc =
+                offsetPx / u_viewport * 2.0;
+
+              clip.xy += offsetNdc * clip.w;
+
+              gl_Position = clip;
+              v_mercator = a_pos.xy;
+              v_air_meters = a_air_meters;
+            }
+          `;
+
+          const airFragment = `#version 300 es
+            precision highp float;
+
+            uniform sampler2D u_height_map;
+            uniform vec4 u_height_bounds;
+            uniform float u_force_visible;
+            uniform vec4 u_color;
+
+            in vec2 v_mercator;
+            in float v_air_meters;
+
+            out vec4 fragColor;
+
+            vec4 terrainSample(vec2 xy) {
+              vec2 uv =
+                (xy - u_height_bounds.xy) /
+                (u_height_bounds.zw - u_height_bounds.xy);
+
+              return texture(
+                u_height_map,
+                vec2(uv.x, 1.0 - uv.y)
+              );
+            }
+
+            void main() {
+              // Top view: magenta line is ALWAYS visible.
+              if (u_force_visible < 0.5) {
+                vec4 terrain = terrainSample(v_mercator);
+
+                if (terrain.a < 0.5) discard;
+                if (v_air_meters <= terrain.r) discard;
+              }
+
+              fragColor = u_color;
+            }
+          `;
+
+          route3DLayerState.curtainProgram =
+            linkRoute3DProgram(
+              gl,
+              curtainVertex,
+              curtainFragment
+            );
+
+          route3DLayerState.airProgram =
+            linkRoute3DProgram(
+              gl,
+              airVertex,
+              airFragment
+            );
+
+          route3DLayerState.curtainBuffer = gl.createBuffer();
+          route3DLayerState.verticalBuffer = gl.createBuffer();
+          route3DLayerState.airBuffer = gl.createBuffer();
+
+          route3DLayerState.heightMap = gl.createTexture();
+          gl.bindTexture(
+            gl.TEXTURE_2D,
+            route3DLayerState.heightMap
           );
-          const fs = compileRoute3DShader(
-            gl,
-            gl.FRAGMENT_SHADER,
-            fragmentSource
+
+          gl.texStorage2D(
+            gl.TEXTURE_2D,
+            1,
+            gl.RGBA32F,
+            HEIGHTMAP_SIZE,
+            HEIGHTMAP_SIZE
           );
 
-          const program = gl.createProgram();
-          gl.attachShader(program, vs);
-          gl.attachShader(program, fs);
-          gl.linkProgram(program);
-
-          gl.deleteShader(vs);
-          gl.deleteShader(fs);
-
-          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const message =
-              gl.getProgramInfoLog(program) ||
-              "Unknown route 3D program link error";
-            gl.deleteProgram(program);
-            throw new Error(message);
-          }
-
-          route3DLayerState.program = program;
-          route3DLayerState.buffer = gl.createBuffer();
-          route3DLayerState.aPosition =
-            gl.getAttribLocation(program, "a_position");
-          route3DLayerState.uMatrix =
-            gl.getUniformLocation(program, "u_matrix");
-          route3DLayerState.uColor =
-            gl.getUniformLocation(program, "u_color");
+          gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_MIN_FILTER,
+            gl.LINEAR
+          );
+          gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_MAG_FILTER,
+            gl.LINEAR
+          );
+          gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_WRAP_S,
+            gl.CLAMP_TO_EDGE
+          );
+          gl.texParameteri(
+            gl.TEXTURE_2D,
+            gl.TEXTURE_WRAP_T,
+            gl.CLAMP_TO_EDGE
+          );
         },
 
-        render(gl, matrixLike) {
-          const matrix = extractProjectionMatrix(matrixLike);
+        prerender(gl, options) {
+          rebuildRoute3DGeometryIfNeeded();
+
+          const bounds = route3DLayerState.bounds;
+
+          if (
+            !bounds ||
+            !route3DLayerState.heightMap ||
+            typeof options?.renderTerrainHeightMap !== "function"
+          ) {
+            route3DLayerState.heightMapReady = false;
+            return;
+          }
+
+          options.renderTerrainHeightMap({
+            texture: route3DLayerState.heightMap,
+            width: HEIGHTMAP_SIZE,
+            height: HEIGHTMAP_SIZE,
+            bounds
+          });
+
+          route3DLayerState.heightMapReady = true;
+        },
+
+        render(gl, options) {
+          rebuildRoute3DGeometryIfNeeded();
+
+          const matrix = extractProjectionMatrix(options);
           if (!matrix) return;
 
-          const state = route3DLayerState;
-          if (!state.program || !state.buffer) return;
-
-          const geometry = buildFreshRoute3DGeometry();
           const topView =
             map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG;
 
-          gl.useProgram(state.program);
+          // Thick magenta airborne route.
+          const airVertices = route3DLayerState.airVertices;
+
+          if (airVertices.length >= 48) {
+            const program = route3DLayerState.airProgram;
+            gl.useProgram(program);
+
+            bindAirRibbonAttributes(
+              gl,
+              program,
+              airVertices
+            );
+
+            gl.uniformMatrix4fv(
+              gl.getUniformLocation(program, "u_matrix"),
+              false,
+              matrix
+            );
+
+            gl.uniform2f(
+              gl.getUniformLocation(program, "u_viewport"),
+              gl.drawingBufferWidth,
+              gl.drawingBufferHeight
+            );
+
+            gl.uniform1f(
+              gl.getUniformLocation(program, "u_half_width_px"),
+              AIR_ROUTE_HALF_WIDTH_PX
+            );
+
+            gl.uniform1f(
+              gl.getUniformLocation(program, "u_force_visible"),
+              topView ? 1 : 0
+            );
+
+            gl.uniform4f(
+              gl.getUniformLocation(program, "u_color"),
+              0.93,
+              0.0,
+              0.72,
+              1.0
+            );
+
+            if (route3DLayerState.bounds) {
+              bindTerrainHeightMap(gl, program);
+            }
+
+            if (topView || route3DLayerState.heightMapReady) {
+              gl.enable(gl.DEPTH_TEST);
+              gl.depthFunc(gl.LEQUAL);
+              gl.disable(gl.BLEND);
+
+              gl.drawArrays(
+                gl.TRIANGLES,
+                0,
+                airVertices.length / 8
+              );
+            }
+          }
+
+          // Top view = magenta route only.
+          if (topView) return;
+
+          if (!route3DLayerState.heightMapReady) return;
+
+          const curtainProgram =
+            route3DLayerState.curtainProgram;
+          gl.useProgram(curtainProgram);
+
+          gl.uniformMatrix4fv(
+            gl.getUniformLocation(curtainProgram, "u_matrix"),
+            false,
+            matrix
+          );
+
+          bindTerrainHeightMap(gl, curtainProgram);
+
           gl.enable(gl.DEPTH_TEST);
           gl.depthFunc(gl.LEQUAL);
           gl.disable(gl.CULL_FACE);
 
-          // TOP VIEW:
-          // render ONLY the MSL air route.
-          if (topView) {
-            gl.disable(gl.BLEND);
+          // Navy curtain, 80% transparent.
+          const curtainVertices =
+            route3DLayerState.curtainVertices;
 
-            drawRoute3DGeometry(
+          if (curtainVertices.length >= 18) {
+            bindCurtainAttributes(
               gl,
-              geometry.airLines,
-              gl.LINES,
-              matrix,
-              [1.0, 0.0, 0.72, 1.0], // magenta
-              3.0
+              curtainProgram,
+              route3DLayerState.curtainBuffer,
+              curtainVertices
             );
 
-            return;
-          }
+            gl.uniform4f(
+              gl.getUniformLocation(curtainProgram, "u_color"),
+              0.06,
+              0.16,
+              0.30,
+              CURTAIN_ALPHA
+            );
 
-          // PITCHED VIEW:
-          // 1) blue curtain, 70% opacity
-          if (geometry.curtainTriangles.length >= 9) {
             gl.enable(gl.BLEND);
-            gl.blendFunc(
+            gl.blendFuncSeparate(
               gl.SRC_ALPHA,
+              gl.ONE_MINUS_SRC_ALPHA,
+              gl.ONE,
               gl.ONE_MINUS_SRC_ALPHA
             );
             gl.depthMask(false);
 
-            drawRoute3DGeometry(
-              gl,
-              geometry.curtainTriangles,
+            gl.drawArrays(
               gl.TRIANGLES,
-              matrix,
-              [0.06, 0.42, 1.0, 0.70]
+              0,
+              curtainVertices.length / 6
             );
 
             gl.depthMask(true);
           }
 
-          // 2) white 1pt ground route on DEM surface
-          if (geometry.groundLines.length >= 6) {
-            gl.disable(gl.BLEND);
+          // Vertical reference lines every 0.5 NM.
+          const verticalVertices =
+            route3DLayerState.verticalVertices;
 
-            drawRoute3DGeometry(
+          if (verticalVertices.length >= 12) {
+            bindCurtainAttributes(
               gl,
-              geometry.groundLines,
-              gl.LINES,
-              matrix,
-              [1.0, 1.0, 1.0, 1.0],
-              1.0
+              curtainProgram,
+              route3DLayerState.verticalBuffer,
+              verticalVertices
             );
-          }
 
-          // 3) magenta 3pt air route at planned MSL,
-          // only where route is physically above DEM terrain.
-          if (geometry.airLines.length >= 6) {
-            gl.disable(gl.BLEND);
+            gl.uniform4f(
+              gl.getUniformLocation(curtainProgram, "u_color"),
+              0.46,
+              0.62,
+              0.78,
+              0.75
+            );
 
-            drawRoute3DGeometry(
-              gl,
-              geometry.airLines,
+            gl.enable(gl.BLEND);
+            gl.blendFuncSeparate(
+              gl.SRC_ALPHA,
+              gl.ONE_MINUS_SRC_ALPHA,
+              gl.ONE,
+              gl.ONE_MINUS_SRC_ALPHA
+            );
+
+            gl.lineWidth(1);
+
+            gl.drawArrays(
               gl.LINES,
-              matrix,
-              [1.0, 0.0, 0.72, 1.0],
-              3.0
+              0,
+              verticalVertices.length / 6
             );
           }
         },
 
         onRemove(mapInstance, gl) {
-          if (route3DLayerState.buffer) {
-            gl.deleteBuffer(
-              route3DLayerState.buffer
-            );
-            route3DLayerState.buffer = null;
+          for (const buffer of [
+            route3DLayerState.curtainBuffer,
+            route3DLayerState.verticalBuffer,
+            route3DLayerState.airBuffer
+          ]) {
+            if (buffer) gl.deleteBuffer(buffer);
           }
 
-          if (route3DLayerState.program) {
-            gl.deleteProgram(
-              route3DLayerState.program
-            );
-            route3DLayerState.program = null;
+          for (const program of [
+            route3DLayerState.curtainProgram,
+            route3DLayerState.airProgram
+          ]) {
+            if (program) gl.deleteProgram(program);
+          }
+
+          if (route3DLayerState.heightMap) {
+            gl.deleteTexture(route3DLayerState.heightMap);
           }
         }
       });
     }
 
     function refreshRoute3D() {
-      if (
-        route3DProfileCache.signature !== route3DSignature()
-      ) {
-        invalidateRoute3DProfile();
-      }
+      invalidateRoute3DGeometry();
 
-      if (
-        route.length >= 2 &&
-        terrainReady &&
-        !route3DProfileCache.locked
-      ) {
-        buildRoute3DProfile();
-      }
-
-      if (
-        map &&
-        typeof map.triggerRepaint === "function"
-      ) {
+      if (map && typeof map.triggerRepaint === "function") {
         map.triggerRepaint();
       }
     }
 
     function getRoute3DAltitudeDiagnostics() {
-      const profile = ensureRoute3DProfile();
+      rebuildRoute3DGeometryIfNeeded();
 
       return {
-        logicVersion: "v46 rebuilt from scratch",
-        routeTerrainSampleNM:
-          ROUTE_TERRAIN_SAMPLE_NM,
-        topViewPitchThresholdDeg:
-          TOP_VIEW_PITCH_THRESHOLD_DEG,
-        groundRoute:
-          "white 1pt, DEM surface",
-        airRoute:
-          "magenta 3pt, planned MSL, visible only where AGL > 0",
+        logicVersion:
+          "v47 MapLibre terrain-height-map shader",
+        mapLibreVersion:
+          maplibregl.version ?? "unknown",
+        terrainHeightMapAPI:
+          "renderTerrainHeightMap",
+        cpuTerrainSamplingForCurtain: false,
+        whiteGroundRoute:
+          "MapLibre terrain-draped style line",
+        magentaAirRoute:
+          "route-point MSL only; ~7px screen-space ribbon",
+        airRouteTopViewAlwaysVisible: true,
         curtain:
-          "blue, 70% opacity, only where AGL > 0",
+          "navy; 80% transparency (alpha 0.20)",
+        curtainBottom:
+          "MapLibre terrain height map sampled directly in shader",
+        verticalLineIntervalNM:
+          CURTAIN_VERTICAL_INTERVAL_NM,
         topView:
-          "air route only",
+          "magenta air route only",
         pitchedView:
-          "ground route + curtain + air route",
+          "white draped ground line + navy curtain + magenta air route",
         terrainExaggeration: 1,
         routeVerticalExaggeration: false,
-        cacheLocked: profile.locked,
-        missingTerrainSamples:
-          profile.missingTerrainSamples,
-        sampledAt: profile.sampledAt
+        heightMapSize: HEIGHTMAP_SIZE,
+        heightMapReady:
+          route3DLayerState.heightMapReady,
+        heightMapBounds:
+          route3DLayerState.bounds
       };
     }
 
     function resampleRouteTerrainProfile() {
-      invalidateRoute3DProfile();
-      const profile = buildRoute3DProfile();
+      // Compatibility method. v47 has no CPU terrain profile.
+      route3DLayerState.heightMapReady = false;
 
-      if (
-        map &&
-        typeof map.triggerRepaint === "function"
-      ) {
+      if (map && typeof map.triggerRepaint === "function") {
         map.triggerRepaint();
       }
 
@@ -2268,15 +2592,8 @@
     }
 
     function maybeCompleteRouteTerrainProfileCache() {
-      if (route.length < 2) return;
-      if (route3DProfileCache.locked) return;
-
-      buildRoute3DProfile();
-
-      if (
-        map &&
-        typeof map.triggerRepaint === "function"
-      ) {
+      // Compatibility no-op; MapLibre supplies terrain height map in prerender.
+      if (map && typeof map.triggerRepaint === "function") {
         map.triggerRepaint();
       }
     }
@@ -3046,7 +3363,7 @@
           source: "route-source",
           paint: {
             "line-color": "#ffffff",
-            "line-width": 2.5,
+            "line-width": 1,
             "line-opacity": 0
           }
         });
@@ -3642,6 +3959,7 @@
     });
 
     map.on("pitch", () => {
+      updateGroundRouteVisibility();
       updateAircraftMarkerVisuals();
       if (!programmaticFollowUpdate) {
         suppressFollowUntil = performance.now() + 300;
@@ -3684,6 +4002,7 @@
       ensureRouteLayers();
       ensureRoute3DLayer();
       ensureAircraftProjectionLayer();
+      updateGroundRouteVisibility();
       await ensureAirportLayers();
 
       // Explicitly enable MapLibre's native iPad gestures.
@@ -3726,7 +4045,7 @@
         if (!dragState.active) map.getCanvas().style.cursor = "";
       });
 
-      function startRouteDrag(lngLat, source = "mouse") {
+      function startRouteDrag(lngLat, source = "mouse", screenPoint = null) {
         if (!routeModeActive) return false;
         if (route.length < 2) return false;
         if (pointPointerActive || suppressNextRouteDrag) return false;
@@ -3738,29 +4057,47 @@
         dragState.currentLngLat = lngLat;
         dragState.source = source;
         dragState.longPressCancelled = false;
-        dragState.touchStartTime = source === "touch" ? performance.now() : null;
+        dragState.touchStartTime =
+          source === "touch" ? performance.now() : null;
         dragState.touchMoved = false;
+        dragState.movedEnough = false;
+        dragState.startScreenX = screenPoint?.x ?? null;
+        dragState.startScreenY = screenPoint?.y ?? null;
 
         map.dragPan.disable();
         map.getCanvas().style.cursor = "grabbing";
-        dragHint.classList.add("show");
 
-        const i = dragState.segmentIndex;
-        const a = route[i];
-        const b = route[i + 1];
-
-        setPreview([
-          [a.longitude, a.latitude],
-          [lngLat.lng, lngLat.lat],
-          [b.longitude, b.latitude]
-        ]);
+        // A press/tap does nothing until it becomes a real drag.
+        setPreview([]);
+        dragHint.classList.remove("show");
         return true;
       }
 
-      function moveRouteDrag(lngLat) {
+      function moveRouteDrag(lngLat, screenPoint = null) {
         if (!dragState.active) return;
 
         dragState.currentLngLat = lngLat;
+
+        if (
+          !dragState.movedEnough &&
+          screenPoint &&
+          dragState.startScreenX != null &&
+          dragState.startScreenY != null
+        ) {
+          const dx = screenPoint.x - dragState.startScreenX;
+          const dy = screenPoint.y - dragState.startScreenY;
+
+          const threshold =
+            dragState.source === "touch" ? 12 : 6;
+
+          if (Math.hypot(dx, dy) >= threshold) {
+            dragState.movedEnough = true;
+            dragHint.classList.add("show");
+          }
+        }
+
+        if (!dragState.movedEnough) return;
+
         const i = dragState.segmentIndex;
         const a = route[i];
         const b = route[i + 1];
@@ -3781,6 +4118,9 @@
         dragState.longPressCancelled = false;
         dragState.touchStartTime = null;
         dragState.touchMoved = false;
+        dragState.movedEnough = false;
+        dragState.startScreenX = null;
+        dragState.startScreenY = null;
         setPreview([]);
         map.dragPan.enable();
         map.getCanvas().style.cursor = "";
@@ -3789,6 +4129,12 @@
 
       function finishRouteDrag(fallbackLngLat = null) {
         if (!dragState.active) return;
+
+        // Short tap/press on the route line = no action.
+        if (!dragState.movedEnough) {
+          cancelRouteDrag();
+          return;
+        }
 
         // A point drag must never create a VIA point.
         if (pointPointerActive || suppressNextRouteDrag) {
@@ -3821,12 +4167,12 @@
       map.on("mousedown", "route-hit", (e) => {
         if (e.originalEvent && e.originalEvent.button != null && e.originalEvent.button !== 0) return;
         e.preventDefault();
-        startRouteDrag(e.lngLat, "mouse");
+        startRouteDrag(e.lngLat, "mouse", e.point);
       });
 
       map.on("mousemove", (e) => {
         if (!dragState.active || dragState.source !== "mouse") return;
-        moveRouteDrag(e.lngLat);
+        moveRouteDrag(e.lngLat, e.point);
       });
 
       map.on("mouseup", (e) => {
@@ -3842,7 +4188,7 @@
         if (!touches || touches.length !== 1) return;
 
         e.preventDefault();
-        startRouteDrag(e.lngLat, "touch");
+        startRouteDrag(e.lngLat, "touch", e.point);
       });
 
       map.on("touchmove", (e) => {
@@ -3858,7 +4204,7 @@
           dragState.touchMoved = true;
         }
 
-        moveRouteDrag(e.lngLat);
+        moveRouteDrag(e.lngLat, e.point);
       });
 
       map.on("touchend", (e) => {
