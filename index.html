@@ -1613,41 +1613,18 @@
       uColor: null
     };
 
-    const ROUTE_TERRAIN_SAMPLE_NM = 0.5;
-    const ROUTE_DROP_LINE_NM = 1.0;
+    // Rebuilt v46 3D route visualization.
+    // No previous curtain geometry logic is reused.
+    const ROUTE_TERRAIN_SAMPLE_NM = 0.25;
+    const TOP_VIEW_PITCH_THRESHOLD_DEG = 0.1;
 
-    // Route terrain profile cache.
-    // IMPORTANT: once a complete DEM profile is sampled, camera pan/zoom/pitch
-    // must never change the terrain heights used by the 3D route curtain.
-    let routeTerrainProfileCache = {
+    let route3DProfileCache = {
       signature: null,
-      geometry: null,
-      legs: [],
-      sampledAt: null,
-      sampledAtZoom: null,
+      samplesByLeg: [],
       missingTerrainSamples: 0,
-      locked: false
+      locked: false,
+      sampledAt: null
     };
-
-    function emptyRoute3DGeometry() {
-      return {
-        topLines: new Float32Array(),
-        groundLines: new Float32Array(),
-        curtainTriangles: new Float32Array(),
-        dropLines: new Float32Array()
-      };
-    }
-
-    function currentRoute3DSignature() {
-      return JSON.stringify(
-        route.map(point => [
-          point.id,
-          Number(point.latitude),
-          Number(point.longitude),
-          routePointAltitudeFeet(point)
-        ])
-      );
-    }
 
     function compileRoute3DShader(gl, type, source) {
       const shader = gl.createShader(type);
@@ -1667,27 +1644,6 @@
       return Number.isFinite(value) ? value : null;
     }
 
-    function syncVisibleRouteAltitudeInputs(fromPointIndex = 0) {
-      const inputs = document.querySelectorAll(
-        ".route-point-altitude-input[data-route-point-id]"
-      );
-
-      inputs.forEach(input => {
-        const pointId = Number(input.dataset.routePointId);
-        const index = route.findIndex(p => p.id === pointId);
-        if (index < 0 || index < fromPointIndex) return;
-
-        // Never overwrite the field the user is currently typing into.
-        if (document.activeElement === input) return;
-
-        const point = route[index];
-        input.value = Number.isFinite(point.altitudeMslFeet)
-          ? String(Math.round(point.altitudeMslFeet))
-          : "0";
-        input.classList.remove("invalid");
-      });
-    }
-
     function setRoutePointAltitudeMslFeet(
       pointId,
       value,
@@ -1697,15 +1653,12 @@
       const pointIndex = route.findIndex(p => p.id === pointId);
       if (pointIndex < 0) return false;
 
-      // Let the input stay temporarily blank while the user edits it.
-      // Commit-to-zero happens on blur/change instead.
       if (value === "" || value == null) {
         if (inputElement) inputElement.classList.remove("invalid");
         return true;
       }
 
       const altitude = Number(value);
-
       if (!Number.isFinite(altitude) || altitude < 0 || altitude > 60000) {
         if (inputElement) inputElement.classList.add("invalid");
         return false;
@@ -1715,19 +1668,13 @@
         route[i].altitudeMslFeet = altitude;
       }
 
-      if (inputElement) {
-        inputElement.classList.remove("invalid");
-      }
+      if (inputElement) inputElement.classList.remove("invalid");
 
-      // Propagate the new altitude visually without rebuilding the whole Route Info.
       syncVisibleRouteAltitudeInputs(pointIndex + 1);
-
+      invalidateRoute3DProfile();
       refreshRoute3D();
 
-      if (rerender) {
-        updateRouteInfo();
-      }
-
+      if (rerender) updateRouteInfo();
       return true;
     }
 
@@ -1741,6 +1688,7 @@
 
       const distanceMeters = gcDistanceMeters(a, b);
       const bearing = trueBearing(a, b);
+
       return destinationPoint(
         a.latitude,
         a.longitude,
@@ -1761,87 +1709,31 @@
       target.push(xyz[0], xyz[1], xyz[2]);
     }
 
-    function aglMeters(sample) {
-      if (sample?.terrainMeters == null) return null;
-      return sample.altitudeMeters - sample.terrainMeters;
+    function route3DSignature() {
+      return JSON.stringify(
+        route.map(point => [
+          point.id,
+          Number(point.latitude),
+          Number(point.longitude),
+          routePointAltitudeFeet(point)
+        ])
+      );
     }
 
-    function interpolateClippedSample(p0, p1, fraction) {
-      const t = Math.max(0, Math.min(1, fraction));
-
-      const latitude =
-        p0.latitude + (p1.latitude - p0.latitude) * t;
-      const longitude =
-        p0.longitude + (p1.longitude - p0.longitude) * t;
-      const altitudeMeters =
-        p0.altitudeMeters +
-        (p1.altitudeMeters - p0.altitudeMeters) * t;
-      const terrainMeters =
-        p0.terrainMeters +
-        (p1.terrainMeters - p0.terrainMeters) * t;
-      const routeMslFeet =
-        p0.routeMslFeet +
-        (p1.routeMslFeet - p0.routeMslFeet) * t;
-
-      return {
-        t: p0.t + (p1.t - p0.t) * t,
-        latitude,
-        longitude,
-        routeMslFeet,
-        altitudeMeters,
-        terrainMeters,
-        top: mercatorXYZ(longitude, latitude, altitudeMeters),
-        ground: mercatorXYZ(longitude, latitude, terrainMeters)
+    function invalidateRoute3DProfile() {
+      route3DProfileCache = {
+        signature: null,
+        samplesByLeg: [],
+        missingTerrainSamples: 0,
+        locked: false,
+        sampledAt: null
       };
     }
 
-    function aglZeroIntersection(p0, p1) {
-      const a0 = aglMeters(p0);
-      const a1 = aglMeters(p1);
-
-      if (a0 == null || a1 == null) return null;
-      if (a0 === a1) return null;
-
-      const fraction = a0 / (a0 - a1);
-      if (!Number.isFinite(fraction)) return null;
-
-      return interpolateClippedSample(p0, p1, fraction);
-    }
-
-    function appendCurtainQuad(curtainTriangles, p0, p1) {
-      // Only called for a segment where both endpoints are at/above terrain
-      // after clipping. p0/p1 ground positions are exact DEM MSL positions.
-      pushXYZ(curtainTriangles, p0.top);
-      pushXYZ(curtainTriangles, p0.ground);
-      pushXYZ(curtainTriangles, p1.top);
-
-      pushXYZ(curtainTriangles, p1.top);
-      pushXYZ(curtainTriangles, p0.ground);
-      pushXYZ(curtainTriangles, p1.ground);
-    }
-
-    function buildAndCacheRouteTerrainProfile() {
-      const topLines = [];
-      const groundLines = [];
-      const curtainTriangles = [];
-      const dropLines = [];
-      const cachedLegs = [];
+    function buildRoute3DProfile() {
+      const signature = route3DSignature();
+      const samplesByLeg = [];
       let missingTerrainSamples = 0;
-
-      const signature = currentRoute3DSignature();
-
-      if (route.length < 2) {
-        routeTerrainProfileCache = {
-          signature,
-          geometry: emptyRoute3DGeometry(),
-          legs: [],
-          sampledAt: new Date().toISOString(),
-          sampledAtZoom: map.getZoom(),
-          missingTerrainSamples: 0,
-          locked: true
-        };
-        return routeTerrainProfileCache.geometry;
-      }
 
       for (let i = 0; i < route.length - 1; i++) {
         const a = route[i];
@@ -1853,341 +1745,263 @@
 
         const distanceMeters = gcDistanceMeters(a, b);
         const distanceNM = distanceMeters / M_PER_NM;
+
         const sampleCount = Math.max(
           1,
-          Math.min(256, Math.ceil(distanceNM / ROUTE_TERRAIN_SAMPLE_NM))
+          Math.min(
+            512,
+            Math.ceil(distanceNM / ROUTE_TERRAIN_SAMPLE_NM)
+          )
         );
 
         const samples = [];
 
         for (let s = 0; s <= sampleCount; s++) {
-          const t = s / sampleCount;
-          const ll = interpolateRouteLocation(a, b, t);
-          const altitudeFeet = altAFeet + (altBFeet - altAFeet) * t;
-          const altitudeMeters = altitudeFeet * 0.3048;
+          const fraction = s / sampleCount;
+          const ll = interpolateRouteLocation(a, b, fraction);
 
-          // DEM is sampled HERE ONCE for this route geometry revision.
-          // It is not queried again by the render loop after the cache locks.
-          const terrainMeters = terrainElevationMeters(
+          const routeMslFeet =
+            altAFeet + (altBFeet - altAFeet) * fraction;
+          const routeMslMeters = routeMslFeet * 0.3048;
+
+          const terrainMslMeters = terrainElevationMeters(
             ll.latitude,
             ll.longitude
           );
 
-          if (terrainMeters == null) {
+          if (terrainMslMeters == null) {
             missingTerrainSamples += 1;
           }
 
           samples.push({
-            t,
+            fraction,
             latitude: ll.latitude,
             longitude: ll.longitude,
-            routeMslFeet: altitudeFeet,
-            altitudeMeters,
-            terrainMeters,
-            top: mercatorXYZ(
-              ll.longitude,
-              ll.latitude,
-              altitudeMeters
-            ),
-            ground: terrainMeters == null
-              ? null
-              : mercatorXYZ(
-                  ll.longitude,
-                  ll.latitude,
-                  terrainMeters
-                )
+            routeMslFeet,
+            routeMslMeters,
+            terrainMslMeters,
+            aglMeters:
+              terrainMslMeters == null
+                ? null
+                : routeMslMeters - terrainMslMeters
           });
         }
 
-        // Top route line is independent from DEM and remains exact MSL.
-        for (let s = 0; s < samples.length - 1; s++) {
-          pushXYZ(topLines, samples[s].top);
-          pushXYZ(topLines, samples[s + 1].top);
-        }
+        samplesByLeg.push({
+          legIndex: i,
+          samples
+        });
+      }
 
-        // Ground reference route uses the EXACT SAME cached DEM samples as
-        // the curtain bottom. This replaces the old MapLibre style-line route,
-        // so ground line and curtain now share one 3D coordinate system and
-        // one custom-layer projection matrix.
-        for (let s = 0; s < samples.length - 1; s++) {
-          const p0 = samples[s];
-          const p1 = samples[s + 1];
+      route3DProfileCache = {
+        signature,
+        samplesByLeg,
+        missingTerrainSamples,
+        locked: missingTerrainSamples === 0,
+        sampledAt: new Date().toISOString()
+      };
 
-          if (!p0.ground || !p1.ground) continue;
+      return route3DProfileCache;
+    }
 
-          pushXYZ(groundLines, p0.ground);
-          pushXYZ(groundLines, p1.ground);
-        }
+    function ensureRoute3DProfile() {
+      const signature = route3DSignature();
 
-        // Curtain exists ONLY where route altitude is above terrain.
-        // When AGL changes sign between two DEM samples, clip exactly at AGL=0
-        // so the curtain starts/ends at the terrain intersection rather than
-        // extending below terrain.
-        for (let s = 0; s < samples.length - 1; s++) {
-          const p0 = samples[s];
-          const p1 = samples[s + 1];
+      if (
+        route3DProfileCache.signature !== signature ||
+        route3DProfileCache.samplesByLeg.length === 0
+      ) {
+        return buildRoute3DProfile();
+      }
+
+      return route3DProfileCache;
+    }
+
+    function sampleTo3D(sample) {
+      if (sample.terrainMslMeters == null) return null;
+
+      return {
+        air: mercatorXYZ(
+          sample.longitude,
+          sample.latitude,
+          sample.routeMslMeters
+        ),
+        ground: mercatorXYZ(
+          sample.longitude,
+          sample.latitude,
+          sample.terrainMslMeters
+        )
+      };
+    }
+
+    function interpolateProfileSample(a, b, t) {
+      const f = Math.max(0, Math.min(1, t));
+
+      const latitude = a.latitude + (b.latitude - a.latitude) * f;
+      const longitude = a.longitude + (b.longitude - a.longitude) * f;
+      const routeMslFeet =
+        a.routeMslFeet + (b.routeMslFeet - a.routeMslFeet) * f;
+      const routeMslMeters =
+        a.routeMslMeters + (b.routeMslMeters - a.routeMslMeters) * f;
+      const terrainMslMeters =
+        a.terrainMslMeters +
+        (b.terrainMslMeters - a.terrainMslMeters) * f;
+
+      return {
+        fraction: a.fraction + (b.fraction - a.fraction) * f,
+        latitude,
+        longitude,
+        routeMslFeet,
+        routeMslMeters,
+        terrainMslMeters,
+        aglMeters: routeMslMeters - terrainMslMeters
+      };
+    }
+
+    function terrainIntersectionSample(a, b) {
+      if (
+        a.aglMeters == null ||
+        b.aglMeters == null ||
+        a.aglMeters === b.aglMeters
+      ) {
+        return null;
+      }
+
+      const t = a.aglMeters / (a.aglMeters - b.aglMeters);
+
+      if (!Number.isFinite(t) || t < 0 || t > 1) {
+        return null;
+      }
+
+      return interpolateProfileSample(a, b, t);
+    }
+
+    function appendLineSegment(target, p0, p1) {
+      pushXYZ(target, p0);
+      pushXYZ(target, p1);
+    }
+
+    function appendCurtainQuad(target, a, b) {
+      const a3 = sampleTo3D(a);
+      const b3 = sampleTo3D(b);
+      if (!a3 || !b3) return;
+
+      pushXYZ(target, a3.air);
+      pushXYZ(target, a3.ground);
+      pushXYZ(target, b3.air);
+
+      pushXYZ(target, b3.air);
+      pushXYZ(target, a3.ground);
+      pushXYZ(target, b3.ground);
+    }
+
+    function buildFreshRoute3DGeometry() {
+      const profile = ensureRoute3DProfile();
+
+      const airLines = [];
+      const groundLines = [];
+      const curtainTriangles = [];
+
+      for (const leg of profile.samplesByLeg) {
+        const samples = leg.samples;
+
+        for (let i = 0; i < samples.length - 1; i++) {
+          const a = samples[i];
+          const b = samples[i + 1];
 
           if (
-            p0.terrainMeters == null ||
-            p1.terrainMeters == null ||
-            !p0.ground ||
-            !p1.ground
+            a.terrainMslMeters == null ||
+            b.terrainMslMeters == null
           ) {
             continue;
           }
 
-          const agl0 = aglMeters(p0);
-          const agl1 = aglMeters(p1);
+          const a3 = sampleTo3D(a);
+          const b3 = sampleTo3D(b);
+          if (!a3 || !b3) continue;
 
-          if (agl0 == null || agl1 == null) continue;
-
-          // Fully above terrain.
-          if (agl0 > 0 && agl1 > 0) {
-            appendCurtainQuad(curtainTriangles, p0, p1);
-            continue;
-          }
-
-          // Fully at/below terrain: no curtain.
-          if (agl0 <= 0 && agl1 <= 0) {
-            continue;
-          }
-
-          // Crosses terrain between samples.
-          const intersection = aglZeroIntersection(p0, p1);
-          if (!intersection) continue;
-
-          if (agl0 > 0 && agl1 <= 0) {
-            // Curtain ends at terrain intersection.
-            appendCurtainQuad(curtainTriangles, p0, intersection);
-          } else if (agl0 <= 0 && agl1 > 0) {
-            // Curtain starts at terrain intersection.
-            appendCurtainQuad(curtainTriangles, intersection, p1);
-          }
-        }
-
-        // Drop lines also sample DEM once and become part of the fixed cache.
-        const dropSamples = [];
-        const dropDistances = [0];
-
-        for (
-          let d = ROUTE_DROP_LINE_NM;
-          d < distanceNM - 1e-6;
-          d += ROUTE_DROP_LINE_NM
-        ) {
-          dropDistances.push(d);
-        }
-
-        if (distanceNM > 1e-6) {
-          dropDistances.push(distanceNM);
-        }
-
-        for (const dNM of dropDistances) {
-          const t = distanceNM > 0 ? dNM / distanceNM : 0;
-          const ll = interpolateRouteLocation(a, b, t);
-          const altitudeFeet = altAFeet + (altBFeet - altAFeet) * t;
-          const altitudeMeters = altitudeFeet * 0.3048;
-          const terrainMeters = terrainElevationMeters(
-            ll.latitude,
-            ll.longitude
+          // Ground route ALWAYS follows the DEM surface.
+          appendLineSegment(
+            groundLines,
+            a3.ground,
+            b3.ground
           );
 
-          if (terrainMeters == null) {
-            missingTerrainSamples += 1;
+          // Air route / curtain only exist where MSL route is above terrain.
+          const aAbove = a.aglMeters > 0;
+          const bAbove = b.aglMeters > 0;
+
+          if (aAbove && bAbove) {
+            appendLineSegment(
+              airLines,
+              a3.air,
+              b3.air
+            );
+
+            appendCurtainQuad(
+              curtainTriangles,
+              a,
+              b
+            );
             continue;
           }
 
-          const aglMetersValue = altitudeMeters - terrainMeters;
-          const aglFeetValue = altitudeFeet - terrainMeters * 3.28084;
-
-          // A vertical drop line is meaningful only when the planned route is
-          // physically above the terrain.
-          if (aglMetersValue > 0) {
-            const top = mercatorXYZ(
-              ll.longitude,
-              ll.latitude,
-              altitudeMeters
-            );
-            const ground = mercatorXYZ(
-              ll.longitude,
-              ll.latitude,
-              terrainMeters
-            );
-
-            pushXYZ(dropLines, top);
-            pushXYZ(dropLines, ground);
+          // Entire segment is at/below terrain:
+          // ground route only.
+          if (!aAbove && !bAbove) {
+            continue;
           }
 
-          dropSamples.push({
-            distanceNM: dNM,
-            fraction: t,
-            latitude: ll.latitude,
-            longitude: ll.longitude,
-            routeMslFeet: altitudeFeet,
-            terrainMslFeet: terrainMeters * 3.28084,
-            aglFeet: aglFeetValue,
-            dropLineVisible: aglMetersValue > 0
-          });
+          // Segment crosses terrain. Clip air route and curtain at AGL=0.
+          const crossing = terrainIntersectionSample(a, b);
+          if (!crossing) continue;
+
+          const c3 = sampleTo3D(crossing);
+          if (!c3) continue;
+
+          if (aAbove) {
+            appendLineSegment(
+              airLines,
+              a3.air,
+              c3.air
+            );
+
+            appendCurtainQuad(
+              curtainTriangles,
+              a,
+              crossing
+            );
+          } else {
+            appendLineSegment(
+              airLines,
+              c3.air,
+              b3.air
+            );
+
+            appendCurtainQuad(
+              curtainTriangles,
+              crossing,
+              b
+            );
+          }
         }
-
-        cachedLegs.push({
-          legIndex: i,
-          fromPointId: a.id,
-          toPointId: b.id,
-          fromMslFeet: altAFeet,
-          toMslFeet: altBFeet,
-          distanceNM,
-          samples: samples.map(sample => ({
-            fraction: sample.t,
-            latitude: sample.latitude,
-            longitude: sample.longitude,
-            routeMslFeet: sample.routeMslFeet,
-            terrainMslFeet:
-              sample.terrainMeters == null
-                ? null
-                : sample.terrainMeters * 3.28084,
-            aglFeet:
-              sample.terrainMeters == null
-                ? null
-                : sample.routeMslFeet -
-                  sample.terrainMeters * 3.28084
-          })),
-          dropSamples
-        });
       }
 
-      const geometry = {
-        topLines: new Float32Array(topLines),
+      return {
+        airLines: new Float32Array(airLines),
         groundLines: new Float32Array(groundLines),
-        curtainTriangles: new Float32Array(curtainTriangles),
-        dropLines: new Float32Array(dropLines)
-      };
-
-      routeTerrainProfileCache = {
-        signature,
-        geometry,
-        legs: cachedLegs,
-        sampledAt: new Date().toISOString(),
-        sampledAtZoom: map.getZoom(),
-        missingTerrainSamples,
-        // Once there are no missing DEM values, freeze the terrain profile.
-        locked: missingTerrainSamples === 0
-      };
-
-      return geometry;
-    }
-
-    function getCachedRoute3DGeometry() {
-      const signature = currentRoute3DSignature();
-
-      if (
-        routeTerrainProfileCache.signature !== signature ||
-        !routeTerrainProfileCache.geometry
-      ) {
-        return buildAndCacheRouteTerrainProfile();
-      }
-
-      return routeTerrainProfileCache.geometry;
-    }
-
-    function invalidateRouteTerrainProfileCache() {
-      routeTerrainProfileCache.signature = null;
-      routeTerrainProfileCache.geometry = null;
-      routeTerrainProfileCache.legs = [];
-      routeTerrainProfileCache.sampledAt = null;
-      routeTerrainProfileCache.sampledAtZoom = null;
-      routeTerrainProfileCache.missingTerrainSamples = 0;
-      routeTerrainProfileCache.locked = false;
-    }
-
-    function resampleRouteTerrainProfile() {
-      invalidateRouteTerrainProfileCache();
-      const geometry = buildAndCacheRouteTerrainProfile();
-
-      if (map && typeof map.triggerRepaint === "function") {
-        map.triggerRepaint();
-      }
-
-      return {
-        locked: routeTerrainProfileCache.locked,
-        missingTerrainSamples:
-          routeTerrainProfileCache.missingTerrainSamples,
-        sampledAt: routeTerrainProfileCache.sampledAt,
-        sampledAtZoom: routeTerrainProfileCache.sampledAtZoom,
-        geometry
+        curtainTriangles: new Float32Array(curtainTriangles)
       };
     }
 
-    function maybeCompleteRouteTerrainProfileCache() {
-      if (route.length < 2) return;
-      if (routeTerrainProfileCache.locked) return;
-
-      const signature = currentRoute3DSignature();
-
-      if (routeTerrainProfileCache.signature !== signature) {
-        return;
-      }
-
-      // Only incomplete caches are allowed to retry.
-      // A fully sampled/locked profile never changes because of camera movement.
-      buildAndCacheRouteTerrainProfile();
-
-      if (map && typeof map.triggerRepaint === "function") {
-        map.triggerRepaint();
-      }
-    }
-
-    function getRoute3DAltitudeDiagnostics() {
-      const signature = currentRoute3DSignature();
-
-      if (
-        routeTerrainProfileCache.signature !== signature ||
-        !routeTerrainProfileCache.geometry
-      ) {
-        buildAndCacheRouteTerrainProfile();
-      }
-
-      const legs = routeTerrainProfileCache.legs.map(leg => {
-        const samples = leg.samples || [];
-        const midIndex = samples.length
-          ? Math.floor(samples.length / 2)
-          : -1;
-        const mid = midIndex >= 0 ? samples[midIndex] : null;
-
-        return {
-          legIndex: leg.legIndex,
-          fromMslFeet: leg.fromMslFeet,
-          toMslFeet: leg.toMslFeet,
-          midpointRouteMslFeet: mid?.routeMslFeet ?? null,
-          midpointTerrainMslFeet: mid?.terrainMslFeet ?? null,
-          midpointAglFeet: mid?.aglFeet ?? null
-        };
-      });
-
-      return {
-        verticalExaggerationAppliedByRouteCode: false,
-        terrainExaggeration: 1,
-        routeAltitudeConversion: "feet * 0.3048 -> meters MSL",
-        terrainSamplingMode: "fixed cached profile",
-        cameraMovementResamplesTerrain: false,
-        cacheLocked: routeTerrainProfileCache.locked,
-        missingTerrainSamples:
-          routeTerrainProfileCache.missingTerrainSamples,
-        sampledAt: routeTerrainProfileCache.sampledAt,
-        sampledAtZoom: routeTerrainProfileCache.sampledAtZoom,
-        curtainRule: "visible only where AGL > 0",
-        terrainIntersectionClipping: "linear interpolation at AGL = 0",
-        dropLineRule: "visible only where AGL > 0",
-        groundRouteRendering: "custom 3D layer using same cached DEM samples",
-        sharedProjectionMatrix: true,
-        oldStyleGroundRouteVisible: false,
-        note:
-          "Once cacheLocked=true, pan/zoom/pitch changes only camera projection. " +
-          "They do not change the MSL/DEM values used by the route curtain.",
-        legs
-      };
-    }
-
-    function drawRoute3DGeometry(gl, vertices, mode, matrix, color) {
+    function drawRoute3DGeometry(
+      gl,
+      vertices,
+      mode,
+      matrix,
+      color,
+      lineWidth = 1
+    ) {
       if (!vertices || vertices.length < 3) return;
 
       const state = route3DLayerState;
@@ -2206,7 +2020,18 @@
       );
 
       gl.uniformMatrix4fv(state.uMatrix, false, matrix);
-      gl.uniform4f(state.uColor, color[0], color[1], color[2], color[3]);
+      gl.uniform4f(
+        state.uColor,
+        color[0],
+        color[1],
+        color[2],
+        color[3]
+      );
+
+      if (mode === gl.LINES) {
+        gl.lineWidth(lineWidth);
+      }
+
       gl.drawArrays(mode, 0, vertices.length / 3);
     }
 
@@ -2238,8 +2063,16 @@
             }
           `;
 
-          const vs = compileRoute3DShader(gl, gl.VERTEX_SHADER, vertexSource);
-          const fs = compileRoute3DShader(gl, gl.FRAGMENT_SHADER, fragmentSource);
+          const vs = compileRoute3DShader(
+            gl,
+            gl.VERTEX_SHADER,
+            vertexSource
+          );
+          const fs = compileRoute3DShader(
+            gl,
+            gl.FRAGMENT_SHADER,
+            fragmentSource
+          );
 
           const program = gl.createProgram();
           gl.attachShader(program, vs);
@@ -2250,16 +2083,21 @@
           gl.deleteShader(fs);
 
           if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-            const message = gl.getProgramInfoLog(program) || "Unknown route 3D program link error";
+            const message =
+              gl.getProgramInfoLog(program) ||
+              "Unknown route 3D program link error";
             gl.deleteProgram(program);
             throw new Error(message);
           }
 
           route3DLayerState.program = program;
           route3DLayerState.buffer = gl.createBuffer();
-          route3DLayerState.aPosition = gl.getAttribLocation(program, "a_position");
-          route3DLayerState.uMatrix = gl.getUniformLocation(program, "u_matrix");
-          route3DLayerState.uColor = gl.getUniformLocation(program, "u_color");
+          route3DLayerState.aPosition =
+            gl.getAttribLocation(program, "a_position");
+          route3DLayerState.uMatrix =
+            gl.getUniformLocation(program, "u_matrix");
+          route3DLayerState.uColor =
+            gl.getUniformLocation(program, "u_color");
         },
 
         render(gl, matrixLike) {
@@ -2269,79 +2107,95 @@
           const state = route3DLayerState;
           if (!state.program || !state.buffer) return;
 
-          const geometry = getCachedRoute3DGeometry();
+          const geometry = buildFreshRoute3DGeometry();
+          const topView =
+            map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG;
 
           gl.useProgram(state.program);
           gl.enable(gl.DEPTH_TEST);
           gl.depthFunc(gl.LEQUAL);
           gl.disable(gl.CULL_FACE);
 
-          // Curtain first. It is translucent and does not write depth.
+          // TOP VIEW:
+          // render ONLY the MSL air route.
+          if (topView) {
+            gl.disable(gl.BLEND);
+
+            drawRoute3DGeometry(
+              gl,
+              geometry.airLines,
+              gl.LINES,
+              matrix,
+              [1.0, 0.0, 0.72, 1.0], // magenta
+              3.0
+            );
+
+            return;
+          }
+
+          // PITCHED VIEW:
+          // 1) blue curtain, 70% opacity
           if (geometry.curtainTriangles.length >= 9) {
             gl.enable(gl.BLEND);
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.blendFunc(
+              gl.SRC_ALPHA,
+              gl.ONE_MINUS_SRC_ALPHA
+            );
             gl.depthMask(false);
+
             drawRoute3DGeometry(
               gl,
               geometry.curtainTriangles,
               gl.TRIANGLES,
               matrix,
-              [0.08, 0.55, 0.95, 0.22]
+              [0.06, 0.42, 1.0, 0.70]
             );
+
             gl.depthMask(true);
           }
 
-          // Ground reference route: exact cached DEM coordinates.
-          // It shares the same projection matrix as the curtain/top route.
+          // 2) white 1pt ground route on DEM surface
           if (geometry.groundLines.length >= 6) {
             gl.disable(gl.BLEND);
-            gl.enable(gl.DEPTH_TEST);
-            gl.depthFunc(gl.LEQUAL);
-            gl.lineWidth(2.5);
+
             drawRoute3DGeometry(
               gl,
               geometry.groundLines,
               gl.LINES,
               matrix,
-              [1.0, 1.0, 1.0, 1.0]
+              [1.0, 1.0, 1.0, 1.0],
+              1.0
             );
           }
 
-          // Vertical DEM drop lines.
-          if (geometry.dropLines.length >= 6) {
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-            gl.lineWidth(1.5);
-            drawRoute3DGeometry(
-              gl,
-              geometry.dropLines,
-              gl.LINES,
-              matrix,
-              [0.96, 0.98, 1.0, 0.78]
-            );
-          }
-
-          // Top MSL flight path last for maximum readability.
-          if (geometry.topLines.length >= 6) {
+          // 3) magenta 3pt air route at planned MSL,
+          // only where route is physically above DEM terrain.
+          if (geometry.airLines.length >= 6) {
             gl.disable(gl.BLEND);
-            gl.lineWidth(3.0);
+
             drawRoute3DGeometry(
               gl,
-              geometry.topLines,
+              geometry.airLines,
               gl.LINES,
               matrix,
-              [0.20, 0.76, 1.0, 1.0]
+              [1.0, 0.0, 0.72, 1.0],
+              3.0
             );
           }
         },
 
         onRemove(mapInstance, gl) {
           if (route3DLayerState.buffer) {
-            gl.deleteBuffer(route3DLayerState.buffer);
+            gl.deleteBuffer(
+              route3DLayerState.buffer
+            );
             route3DLayerState.buffer = null;
           }
+
           if (route3DLayerState.program) {
-            gl.deleteProgram(route3DLayerState.program);
+            gl.deleteProgram(
+              route3DLayerState.program
+            );
             route3DLayerState.program = null;
           }
         }
@@ -2349,15 +2203,80 @@
     }
 
     function refreshRoute3D() {
-      // This function is called by route geometry/altitude changes.
-      // Route changes intentionally invalidate the fixed DEM profile.
-      invalidateRouteTerrainProfileCache();
-
-      if (route.length >= 2 && terrainReady) {
-        buildAndCacheRouteTerrainProfile();
+      if (
+        route3DProfileCache.signature !== route3DSignature()
+      ) {
+        invalidateRoute3DProfile();
       }
 
-      if (map && typeof map.triggerRepaint === "function") {
+      if (
+        route.length >= 2 &&
+        terrainReady &&
+        !route3DProfileCache.locked
+      ) {
+        buildRoute3DProfile();
+      }
+
+      if (
+        map &&
+        typeof map.triggerRepaint === "function"
+      ) {
+        map.triggerRepaint();
+      }
+    }
+
+    function getRoute3DAltitudeDiagnostics() {
+      const profile = ensureRoute3DProfile();
+
+      return {
+        logicVersion: "v46 rebuilt from scratch",
+        routeTerrainSampleNM:
+          ROUTE_TERRAIN_SAMPLE_NM,
+        topViewPitchThresholdDeg:
+          TOP_VIEW_PITCH_THRESHOLD_DEG,
+        groundRoute:
+          "white 1pt, DEM surface",
+        airRoute:
+          "magenta 3pt, planned MSL, visible only where AGL > 0",
+        curtain:
+          "blue, 70% opacity, only where AGL > 0",
+        topView:
+          "air route only",
+        pitchedView:
+          "ground route + curtain + air route",
+        terrainExaggeration: 1,
+        routeVerticalExaggeration: false,
+        cacheLocked: profile.locked,
+        missingTerrainSamples:
+          profile.missingTerrainSamples,
+        sampledAt: profile.sampledAt
+      };
+    }
+
+    function resampleRouteTerrainProfile() {
+      invalidateRoute3DProfile();
+      const profile = buildRoute3DProfile();
+
+      if (
+        map &&
+        typeof map.triggerRepaint === "function"
+      ) {
+        map.triggerRepaint();
+      }
+
+      return getRoute3DAltitudeDiagnostics();
+    }
+
+    function maybeCompleteRouteTerrainProfileCache() {
+      if (route.length < 2) return;
+      if (route3DProfileCache.locked) return;
+
+      buildRoute3DProfile();
+
+      if (
+        map &&
+        typeof map.triggerRepaint === "function"
+      ) {
         map.triggerRepaint();
       }
     }
@@ -3121,9 +3040,6 @@
           }
         });
 
-        // Visual ground route is rendered by the 3D custom layer.
-        // Keep this style line invisible only to preserve route-source based
-        // interaction infrastructure and layer ordering.
         map.addLayer({
           id: "route-line",
           type: "line",
