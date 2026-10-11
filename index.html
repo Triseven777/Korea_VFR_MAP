@@ -55,6 +55,12 @@
         font-size: 12px;
       }
 
+      .leg-label-distance,
+      .leg-label-bearing {
+        font-size: 9.5px;
+        font-weight: 400;
+      }
+
       .route-info-tab,
       .new-route-tab {
         min-height: 48px;
@@ -110,23 +116,79 @@
 
     .route-point-name {
       display: block;
-      margin-bottom: 2px;
       color: #fff;
       font-weight: 700;
       font-size: 12px;
+      line-height: 1.2;
     }
 
-    .leg-label {
-      padding: 5px 7px;
-      border-radius: 5px;
-      background: rgba(0,0,0,0.82);
-      border: 1px solid rgba(255,255,255,0.65);
+    .route-point-altitude-map {
+      display: block;
+      margin-top: 2px;
       color: #fff;
-      font: 700 12px/1.3 Arial, sans-serif;
+      font-weight: 500;
+      font-size: 11px;
+      line-height: 1.15;
+    }
+
+    /* Map leg label: compact arrow graphic, no black information box. */
+    .leg-label {
+      width: 96px;
+      color: #fff;
       white-space: nowrap;
       user-select: none;
       pointer-events: none;
       text-align: center;
+      font-family: Arial, sans-serif;
+      text-shadow:
+        0 1px 2px rgba(0,0,0,.95),
+        0 0 3px rgba(0,0,0,.9);
+    }
+
+    .leg-label-distance,
+    .leg-label-bearing {
+      font-size: 9.5px;
+      line-height: 1.05;
+      font-weight: 400;
+    }
+
+    .leg-label-distance {
+      margin-bottom: 3px;
+    }
+
+    .leg-label-bearing {
+      margin-top: 3px;
+    }
+
+    .leg-label-arrow {
+      position: relative;
+      width: 88px;
+      height: 8px;
+      margin: 0 auto;
+    }
+
+    .leg-label-arrow::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 7px;
+      top: 3px;
+      height: 1px;
+      background: rgba(255,255,255,.95);
+      box-shadow: 0 1px 2px rgba(0,0,0,.8);
+    }
+
+    .leg-label-arrow::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: 0;
+      height: 0;
+      border-left: 8px solid rgba(255,255,255,.98);
+      border-top: 4px solid transparent;
+      border-bottom: 4px solid transparent;
+      filter: drop-shadow(0 1px 1px rgba(0,0,0,.7));
     }
 
     .point-popup {
@@ -3619,12 +3681,21 @@
       const coords = document.createElement("div");
       coords.className = "route-point-coords";
 
-      const nameHtml = point.name
-        ? `<span class="route-point-name">${escapeHtml(point.name)}</span>`
-        : "";
+      const pointName = (point.name || "").trim();
+      const altitudeFeet = Number(point.altitudeMslFeet);
+      const altitudeHtml =
+        Number.isFinite(altitudeFeet) && altitudeFeet > 0
+          ? `<span class="route-point-altitude-map">${Math.round(altitudeFeet).toLocaleString("en-US")} ft</span>`
+          : "";
 
-      coords.innerHTML =
-        `${nameHtml}${formatLat(point.latitude)}<br>${formatLon(point.longitude)}`;
+      if (pointName) {
+        // Named points use the name instead of coordinates.
+        coords.innerHTML =
+          `<span class="route-point-name">${escapeHtml(pointName)}</span>${altitudeHtml}`;
+      } else {
+        coords.innerHTML =
+          `${formatLat(point.latitude)}<br>${formatLon(point.longitude)}${altitudeHtml}`;
+      }
 
       wrap.appendChild(dot);
       wrap.appendChild(coords);
@@ -3767,14 +3838,22 @@
 
       const el = document.createElement("div");
       el.className = "leg-label";
-      el.innerHTML = leg.bearingMagnetic == null
-        ? `${leg.distanceNM.toFixed(2)} NM<br>MAG ERR`
-        : `${leg.distanceNM.toFixed(2)} NM<br>${String(Math.round(leg.bearingMagnetic)).padStart(3,"0")}°M`;
+
+      const distanceText = `${leg.distanceNM.toFixed(2)} NM`;
+      const bearingText = leg.bearingMagnetic == null
+        ? "MAG ERR"
+        : `${String(Math.round(leg.bearingMagnetic)).padStart(3,"0")}°M`;
+
+      el.innerHTML = `
+        <div class="leg-label-distance">${distanceText}</div>
+        <div class="leg-label-arrow" aria-hidden="true"></div>
+        <div class="leg-label-bearing">${bearingText}</div>
+      `;
 
       const marker = new maplibregl.Marker({
         element: el,
-        anchor: "bottom",
-        offset: [0, -6]
+        anchor: "center",
+        offset: [0, 0]
       })
       .setLngLat([leg.midpoint.longitude, leg.midpoint.latitude])
       .addTo(map);
