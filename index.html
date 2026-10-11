@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.05</title>
+  <title>KoreaVFR_v2.06</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -982,13 +982,21 @@
     .fix-alt-row button { min-width:60px;background:#244c7a;color:white;border:1px solid #ffffff66;border-radius:6px; }
     #fixCoordinates { line-height:1.6; }
     #fixError { color:#ffb98b;margin-top:8px; }
+    #fixCenterPicker { position:fixed;left:50%;top:50%;z-index:50;width:0;height:0;pointer-events:none; }
+    #fixCenterPicker[hidden] {display:none;}
+    #fixCenterPin { position:absolute;width:36px;height:46px;left:-18px;bottom:10px;color:#ff9d32; }
+    #fixCenterPin svg {width:100%;height:100%;}
+    #fixCenterCross {position:absolute;left:-10px;top:-10px;width:20px;height:20px;}
+    #fixCenterCross::before,#fixCenterCross::after {content:"";position:absolute;left:9px;top:0;width:2px;height:20px;background:#ff3030;transform:rotate(45deg);}
+    #fixCenterCross::after {transform:rotate(-45deg);}
+    #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.05 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.06 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1077,6 +1085,7 @@
   </div>
 
 
+    <div id="fixCenterPicker" hidden><button id="fixCenterConfirm" type="button">FIX설정하기</button><div id="fixCenterPin"></div><div id="fixCenterCross"></div></div>
     <section id="fixPopup" hidden aria-label="커스텀 픽스 설정">
       <div style="display:flex;justify-content:space-between"><strong>FIX 설정 · 임시 저장</strong><button id="fixClose" class="popup-close" aria-label="닫기">×</button></div>
       <label for="fixName">픽스 명</label><input id="fixName" maxlength="40" />
@@ -2342,6 +2351,7 @@
 
             out vec2 v_mercator;
             out float v_air_meters;
+            out float v_actual_meters;
 
             vec4 terrainSample(vec2 xy) {
               vec2 uv =
@@ -2369,6 +2379,7 @@
 
               v_mercator = a_xy;
               v_air_meters = a_air_meters;
+              v_actual_meters = mix(a_air_meters, terrain.r, a_ground_flag);
             }
           `;
 
@@ -2381,6 +2392,11 @@
 
             in vec2 v_mercator;
             in float v_air_meters;
+            in float v_actual_meters;
+            uniform int u_outside_fix_pass;
+            uniform int u_fix_count;
+            uniform vec4 u_fix_bounds[64];
+            uniform vec4 u_fix_heights[64];
 
             out vec4 fragColor;
 
@@ -2404,6 +2420,20 @@
               // where planned MSL is above terrain.
               if (v_air_meters <= terrain.r) discard;
 
+              if (u_fix_count > 0) {
+                bool insideFix = false;
+                for (int i = 0; i < 64; i++) {
+                  if (i >= u_fix_count) break;
+                  vec4 area = u_fix_bounds[i];
+                  vec4 heights = u_fix_heights[i];
+                  float lower = area.w + (heights.y > 0.5 ? terrain.r : 0.0);
+                  float upper = heights.x + (heights.z > 0.5 ? terrain.r : 0.0);
+                  if (distance(v_mercator, area.xy) <= area.z &&
+                      v_actual_meters >= lower && v_actual_meters <= upper) insideFix = true;
+                }
+                if (u_outside_fix_pass == 1 && insideFix) discard;
+                if (u_outside_fix_pass == 0 && !insideFix) discard;
+              }
               fragColor = u_color;
             }
           `;
@@ -2674,6 +2704,8 @@
                       const curtainProgram =
                         route3DLayerState.curtainProgram;
                       gl.useProgram(curtainProgram);
+                      uploadFixClipUniforms(gl, curtainProgram);
+                      gl.uniform1i(gl.getUniformLocation(curtainProgram,"u_outside_fix_pass"),0);
             
                       gl.uniformMatrix4fv(
                         gl.getUniformLocation(curtainProgram, "u_matrix"),
@@ -4493,6 +4525,7 @@
       safeEnsureRoute3DLayer();
       // Composite translucent fix volumes after the route curtain.
       if (map.getLayer("custom-fix-volume")) map.moveLayer("custom-fix-volume");
+      ensureCurtainOutsideFixLayer();
       await ensureAirportLayers();
 
       // Explicitly enable MapLibre's native iPad gestures.
@@ -4731,7 +4764,7 @@
       function handleMapTap(e) {
         if (longPressSuppressed()) return;
         if (dragState.active) return;
-        if (fixModeActive) { createCustomFix(e.lngLat); return; }
+        if (fixModeActive) return;
         if (!routeModeActive) return;
 
         const features = map.queryRenderedFeatures(e.point, {
@@ -4797,10 +4830,20 @@
     const fixModeBtn = document.getElementById("fixModeBtn");
     const fixInput = id => document.getElementById(id);
     const pinSvg = `<svg viewBox="0 0 24 30"><path d="M12 29S2 17 2 11a10 10 0 0 1 20 0c0 6-10 18-10 18Z" fill="currentColor" stroke="white" stroke-width="1.2"/><circle cx="12" cy="11" r="4" fill="#142032"/></svg>`;
+    const fixCenterPicker = document.getElementById("fixCenterPicker");
+    document.getElementById("fixCenterPin").innerHTML = pinSvg;
+    document.getElementById("fixCenterConfirm").addEventListener("click", () => {
+      const rect = map.getCanvas().getBoundingClientRect();
+      const location = map.unproject([window.innerWidth / 2 - rect.left, window.innerHeight / 2 - rect.top]);
+      fixCenterPicker.hidden = true;
+      createCustomFix(location);
+    });
     fixModeBtn.addEventListener("click", () => {
       fixModeActive = !fixModeActive;
       fixModeBtn.classList.toggle("active", fixModeActive);
       fixModeBtn.setAttribute("aria-pressed", String(fixModeActive));
+      fixCenterPicker.hidden = !fixModeActive;
+      if (fixModeActive) followSuspendedByUser = true;
       if (!fixModeActive && selectedFix && !saveCurrentFix()) {
         fixModeActive = true; fixModeBtn.classList.add("active");fixModeBtn.setAttribute("aria-pressed","true");
       }
@@ -4931,11 +4974,12 @@
       Object.assign(selectedFix,candidate,{saved:true});
       fixMarkers.get(selectedFix.id).getElement().querySelector(".custom-fix-name").textContent=selectedFix.name;
       updateCustomFixSource();selectedFix=null;fixPopup.hidden=true;
+      fixCenterPicker.hidden=true;
       fixModeActive=false;fixModeBtn.classList.remove("active");fixModeBtn.setAttribute("aria-pressed","false");
       return true;
     }
     document.addEventListener("pointerdown",event=>{
-      if(fixPopup.hidden || fixPopup.contains(event.target) || fixModeBtn.contains(event.target))return;
+      if(fixPopup.hidden || fixPopup.contains(event.target) || fixModeBtn.contains(event.target) || fixCenterPicker.contains(event.target))return;
       if (!saveCurrentFix()) { event.preventDefault();event.stopPropagation();return; }
       if(event.target === map.getCanvas()) suppressTapUntil=performance.now()+500;
     },true);
@@ -4966,6 +5010,43 @@
       resolveFixLabelCollisions();
       map.triggerRepaint();
     }
+    function uploadFixClipUniforms(gl, program) {
+      const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0&&f.lowerFeet!=null&&f.upperFeet!=null).slice(0,64);
+        const bounds=new Float32Array(64*4),heights=new Float32Array(64*4);
+        fixes.forEach((f,i)=>{
+          const center=mercatorData(f.longitude,f.latitude,0);
+          bounds.set([center.x,center.y,f.radiusNM*M_PER_NM*center.meterScale,feetToMeters(f.lowerFeet)],i*4);
+          heights.set([feetToMeters(f.upperFeet),f.lowerRef==="AGL"?1:0,f.upperRef==="AGL"?1:0,0],i*4);
+        });
+        gl.uniform1i(gl.getUniformLocation(program,"u_fix_count"),fixes.length);
+        gl.uniform4fv(gl.getUniformLocation(program,"u_fix_bounds[0]"),bounds);
+        gl.uniform4fv(gl.getUniformLocation(program,"u_fix_heights[0]"),heights);
+    }
+
+    function ensureCurtainOutsideFixLayer() {
+      map.addLayer({id:"route-curtain-outside-fixes",type:"custom",renderingMode:"3d",render(gl,options){
+        if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG || route3DLayerState.disabled || !route3DLayerState.heightMapReady)return;
+        const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0&&f.lowerFeet!=null&&f.upperFeet!=null).slice(0,64);
+        if(!fixes.length)return;
+        const matrix=extractProjectionMatrix(options),program=route3DLayerState.curtainProgram;
+        if(!matrix||!program)return;
+        gl.useProgram(program);gl.uniformMatrix4fv(gl.getUniformLocation(program,"u_matrix"),false,matrix);
+        bindTerrainHeightMap(gl,program);uploadFixClipUniforms(gl,program);
+        gl.uniform1i(gl.getUniformLocation(program,"u_outside_fix_pass"),1);
+        // Restore only the curtain portions outside the altitude-bounded volume.
+        gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.CULL_FACE);
+        gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+        for(const [buffer,vertices,color,mode] of [
+          [route3DLayerState.curtainBuffer,route3DLayerState.curtainVertices,[.06,.16,.30,CURTAIN_ALPHA],gl.TRIANGLES],
+          [route3DLayerState.verticalBuffer,route3DLayerState.verticalVertices,[1,1,1,.8],gl.LINES]]) {
+          if(!vertices.length)continue;
+          bindCurtainAttributes(gl,program,buffer,vertices);gl.uniform4fv(gl.getUniformLocation(program,"u_color"),color);
+          gl.drawArrays(mode,0,vertices.length/6);
+        }
+        gl.depthMask(true);gl.uniform1i(gl.getUniformLocation(program,"u_outside_fix_pass"),0);
+      }});
+    }
+
     function ensureCustomFixLayers() {
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
       map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
