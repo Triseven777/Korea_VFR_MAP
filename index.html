@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.10</title>
+  <title>KoreaVFR_v2.11</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -990,7 +990,7 @@
     #fixCenterCross::before,#fixCenterCross::after {content:"";position:absolute;left:9px;top:0;width:2px;height:20px;background:#ff3030;transform:rotate(45deg);}
     #fixCenterCross::after {transform:rotate(-45deg);}
     #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
-    .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:none;padding:0;border-radius:0;text-shadow:0 1px 2px #000;transform:translate(-50%,-50%);text-align:center;font:700 12px/1.3 Arial;white-space:nowrap;}
+    .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:none;padding:0;border-radius:0;text-shadow:0 1px 2px #000,0 0 3px #000;-webkit-text-stroke:.25px currentColor;transform:translate(-50%,-50%);text-align:center;font:900 14px/1.3 Arial;white-space:nowrap;}
     .custom-fix-altitude .fix-alt-divider {border-top:1px solid #ff9d32;margin:3px 0;}
   </style>
 </head>
@@ -998,7 +998,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.10 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.11 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -5109,7 +5109,7 @@
       const lo=Math.max(0,(-B-Math.sqrt(D))/(2*A)),hi=Math.min(1,(-B+Math.sqrt(D))/(2*A));
       return hi>lo?[lo,hi]:null;
     }
-    function buildFixCurtainIntersectionLines() {
+    function buildFixCurtainIntersectionLines(filled = false) {
       const vertices=[];
       const append=(a,b)=>vertices.push(a.x,a.y,a.z,b.x,b.y,b.z);
       for(const f of customFixes){
@@ -5128,8 +5128,12 @@
             const lo=Math.max(lower,ground),hi=Math.min(upper,air);
             if(hi<lo){previous=null;continue;}
             const pair=[mercatorData(ll.longitude,ll.latitude,lo),mercatorData(ll.longitude,ll.latitude,hi)];
-            if(previous){append(previous[0],pair[0]);append(previous[1],pair[1]);}
-            if(j===0||j===48)append(pair[0],pair[1]);
+            if(previous){
+              if(filled){
+                for(const point of [previous[0],pair[0],previous[1],previous[1],pair[0],pair[1]])vertices.push(point.x,point.y,point.z);
+              }else{append(previous[0],pair[0]);append(previous[1],pair[1]);}
+            }
+            if(!filled&&(j===0||j===48))append(pair[0],pair[1]);
             previous=pair;
           }
         }
@@ -5177,13 +5181,13 @@
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
       map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0}});
       map.addLayer({id:"custom-fix-shadow",type:"fill",source:"custom-fix-areas",filter:["==",["get","floating"],true],paint:{"fill-color":"#000000","fill-opacity":0}});
-      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72,"line-opacity":0}});
+      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":3*96/72,"line-opacity":0}});
       let lastFixTopView=null;
       const updateFixGroundStyle = () => {
         const top=isFixTopView();
         if(top===lastFixTopView)return;
         lastFixTopView=top;
-        map.setPaintProperty("custom-fix-outline","line-width",5*96/72);
+        map.setPaintProperty("custom-fix-outline","line-width",3*96/72);
         // Surface and outline are drawn by one custom renderer in both views.
         map.setPaintProperty("custom-fix-outline","line-opacity",0);
         map.setPaintProperty("custom-fix-fill","fill-opacity",0);
@@ -5200,7 +5204,7 @@
           const topView=isFixTopView();
           const matrix=extractProjectionMatrix(options);if(!matrix)return;
           const vertices=[], outlines=[],bottomOutlines=[];
-          const halfWidth=(5*96/72)/(512*Math.pow(2,map.getZoom()))/2;
+          const halfWidth=(3*96/72)/(512*Math.pow(2,map.getZoom()))/2;
           const vertex=p=>vertices.push(p.x,p.y,p.z);
           for(const fix of customFixes){
             if(!fix.saved||fix.radiusNM<=0)continue;
@@ -5221,7 +5225,7 @@
               const nx=-dy/len*halfWidth,ny=dx/len*halfWidth;
               const p=[a.x+nx,a.y+ny,a.z],q=[a.x-nx,a.y-ny,a.z],r=[b.x+nx,b.y+ny,b.z],t=[b.x-nx,b.y-ny,b.z];
               outlines.push(...p,...q,...r,...r,...q,...t);
-              const la=lower[i],lb=lower[i+1],bx=nx/5,by=ny/5;
+              const la=lower[i],lb=lower[i+1],bx=nx/3,by=ny/3;
               const lp=[la.x+bx,la.y+by,la.z],lq=[la.x-bx,la.y-by,la.z],lr=[lb.x+bx,lb.y+by,lb.z],lt=[lb.x-bx,lb.y-by,lb.z];
               if(!topView) {
                 bottomOutlines.push(...lp,...lq,...lr,...lr,...lq,...lt);
@@ -5238,7 +5242,7 @@
           const location=gl.getAttribLocation(this.program,"a_pos");gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);
           gl.uniformMatrix4fv(gl.getUniformLocation(this.program,"u_matrix"),false,matrix);
           gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
-          gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,.3);
+          gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,.25);
           gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);
           gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(outlines),gl.DYNAMIC_DRAW);
           gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
@@ -5247,6 +5251,15 @@
           gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(bottomOutlines),gl.DYNAMIC_DRAW);
           gl.drawArrays(gl.TRIANGLES,0,bottomOutlines.length/3);
           gl.disable(gl.POLYGON_OFFSET_FILL);
+          const overlapFaces=topView?[]:buildFixCurtainIntersectionLines(true);
+          if(overlapFaces.length){
+            // Source-over blend of orange (alpha .25) and navy curtain (alpha .30).
+            const alpha=.25+.30*(1-.25);
+            const mixed=[(1*.25+.06*.30*.75)/alpha,(.57*.25+.16*.30*.75)/alpha,(0*.25+.30*.30*.75)/alpha];
+            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(overlapFaces),gl.DYNAMIC_DRAW);
+            gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),...mixed,alpha);
+            gl.drawArrays(gl.TRIANGLES,0,overlapFaces.length/3);
+          }
           const intersections=topView?[]:buildFixCurtainIntersectionLines();
           if(intersections.length){
             gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(intersections),gl.DYNAMIC_DRAW);
