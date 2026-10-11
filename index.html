@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.06</title>
+  <title>KoreaVFR_v2.07</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -990,13 +990,15 @@
     #fixCenterCross::before,#fixCenterCross::after {content:"";position:absolute;left:9px;top:0;width:2px;height:20px;background:#ff3030;transform:rotate(45deg);}
     #fixCenterCross::after {transform:rotate(-45deg);}
     #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
+    .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:#142032cc;padding:4px 7px;border-radius:5px;text-align:center;font:700 12px/1.3 Arial;white-space:nowrap;}
+    .custom-fix-altitude .fix-alt-divider {border-top:1px solid #ff9d32;margin:3px 0;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.06 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.07 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -4106,6 +4108,7 @@
       }
       resolveRouteLabelCollisions();
       resolveFixLabelCollisions();
+      updateFixAltitudeLabels();
     }
 
     function renderRoute(options = {}) {
@@ -4874,7 +4877,7 @@
       return coordinates;
     }
     function fixAltitudeMeters(fix, value, reference, latitude = fix.latitude, longitude = fix.longitude) {
-      if (value == null) return null;
+      if (value == null) { value = 0; reference = "AGL"; }
       const ground = reference === "AGL" ? terrainElevationMeters(latitude, longitude) : 0;
       return ground == null ? null : feetToMeters(value) + ground;
     }
@@ -4921,7 +4924,8 @@
       customFixes.push(fix);
       const el = document.createElement("div"); el.className = "custom-fix-pin"; el.innerHTML = pinSvg;
       const name = document.createElement("span"); name.className = "custom-fix-name"; el.appendChild(name);
-      const marker = new maplibregl.Marker({element:el,anchor:"bottom"}).setLngLat([fix.longitude,fix.latitude]).addTo(map);
+      const altitudeLabel = document.createElement("div");altitudeLabel.className="custom-fix-altitude";altitudeLabel.hidden=true;el.appendChild(altitudeLabel);
+      const marker = new maplibregl.Marker({element:el,anchor:"bottom",rotationAlignment:"viewport",pitchAlignment:"viewport"}).setLngLat([fix.longitude,fix.latitude]).addTo(map);
       fixMarkers.set(fix.id,marker);
       let press = null;
       for (const type of ["touchstart", "touchmove", "touchend"]) el.addEventListener(type, event => event.stopPropagation(), {passive:true});
@@ -5008,15 +5012,79 @@
     function updateCustomFixSource() {
       map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
       resolveFixLabelCollisions();
+      updateFixAltitudeLabels();
       map.triggerRepaint();
     }
+    function formatFixAltitude(value,reference) {
+      if(value==null || (value===0&&reference==="AGL"))return "GND";
+      return `${Math.round(value).toLocaleString("en-US")} ft ${reference}`;
+    }
+    function segmentHitsRect(a,b,r) {
+      let t0=0,t1=1;const dx=b.x-a.x,dy=b.y-a.y;
+      for(const [p,q] of [[-dx,a.x-r.left],[dx,r.right-a.x],[-dy,a.y-r.top],[dy,r.bottom-a.y]]){
+        if(p===0){if(q<0)return false;continue;}
+        const t=q/p;if(p<0)t0=Math.max(t0,t);else t1=Math.min(t1,t);
+        if(t0>t1)return false;
+      }return true;
+    }
+    function updateFixAltitudeLabels() {
+      const pins=[...fixMarkers.values()].map(m=>m.getElement().querySelector("svg").getBoundingClientRect());
+      for(const f of customFixes){
+        const label=fixMarkers.get(f.id)?.getElement().querySelector(".custom-fix-altitude");if(!label)continue;
+        label.hidden=!f.saved || map.getZoom()<=10 || (f.upperFeet==null&&f.lowerFeet==null);
+        if(label.hidden)continue;
+        label.innerHTML=`<div>${formatFixAltitude(f.upperFeet,f.upperRef)}</div><div class="fix-alt-divider"></div><div>${formatFixAltitude(f.lowerFeet,f.lowerRef)}</div>`;
+        const rect=label.getBoundingClientRect();
+        const pinHit=pins.some(p=>rect.left<p.right+3&&rect.right>p.left-3&&rect.top<p.bottom+3&&rect.bottom>p.top-3);
+        const edgeHit=customFixes.filter(x=>x.saved&&x.radiusNM>0).some(x=>{
+          const ring=fixCircle(x).map(([lon,lat])=>map.project([lon,lat]));
+          return ring.slice(1).some((point,i)=>segmentHitsRect(ring[i],point,rect));
+        });
+        if(pinHit||edgeHit)label.hidden=true;
+      }
+    }
+    function segmentCircleInterval(a,b,c,radius) {
+      const dx=b.x-a.x,dy=b.y-a.y,ox=a.x-c.x,oy=a.y-c.y;
+      const A=dx*dx+dy*dy;if(A<1e-24)return ox*ox+oy*oy<=radius*radius?[0,1]:null;
+      const B=2*(ox*dx+oy*dy),C=ox*ox+oy*oy-radius*radius,D=B*B-4*A*C;
+      if(D<0)return null;
+      const lo=Math.max(0,(-B-Math.sqrt(D))/(2*A)),hi=Math.min(1,(-B+Math.sqrt(D))/(2*A));
+      return hi>lo?[lo,hi]:null;
+    }
+    function buildFixCurtainIntersectionLines() {
+      const vertices=[];
+      const append=(a,b)=>vertices.push(a.x,a.y,a.z,b.x,b.y,b.z);
+      for(const f of customFixes){
+        if(!f.saved||f.radiusNM<=0)continue;
+        const center=mercatorData(f.longitude,f.latitude,0),radius=f.radiusNM*M_PER_NM*center.meterScale;
+        for(let i=0;i<route.length-1;i++){
+          const a=route[i],b=route[i+1],ma=mercatorData(a.longitude,a.latitude,0),mb=mercatorData(b.longitude,b.latitude,0);
+          const interval=segmentCircleInterval(ma,mb,center,radius);if(!interval)continue;
+          let previous=null;
+          for(let j=0;j<=48;j++){
+            const t=interval[0]+(interval[1]-interval[0])*j/48;
+            const ll=interpolateRouteLocation(a,b,t),ground=terrainElevationMeters(ll.latitude,ll.longitude);
+            const lower=fixAltitudeMeters(f,f.lowerFeet,f.lowerRef,ll.latitude,ll.longitude),upper=fixAltitudeMeters(f,f.upperFeet,f.upperRef,ll.latitude,ll.longitude);
+            const air=feetToMeters((routePointAltitudeFeet(a)??0)*(1-t)+(routePointAltitudeFeet(b)??0)*t);
+            if(ground==null||lower==null||upper==null){previous=null;continue;}
+            const lo=Math.max(lower,ground),hi=Math.min(upper,air);
+            if(hi<lo){previous=null;continue;}
+            const pair=[mercatorData(ll.longitude,ll.latitude,lo),mercatorData(ll.longitude,ll.latitude,hi)];
+            if(previous){append(previous[0],pair[0]);append(previous[1],pair[1]);}
+            if(j===0||j===48)append(pair[0],pair[1]);
+            previous=pair;
+          }
+        }
+      }return vertices;
+    }
+
     function uploadFixClipUniforms(gl, program) {
-      const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0&&f.lowerFeet!=null&&f.upperFeet!=null).slice(0,64);
+      const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0).slice(0,64);
         const bounds=new Float32Array(64*4),heights=new Float32Array(64*4);
         fixes.forEach((f,i)=>{
           const center=mercatorData(f.longitude,f.latitude,0);
-          bounds.set([center.x,center.y,f.radiusNM*M_PER_NM*center.meterScale,feetToMeters(f.lowerFeet)],i*4);
-          heights.set([feetToMeters(f.upperFeet),f.lowerRef==="AGL"?1:0,f.upperRef==="AGL"?1:0,0],i*4);
+          bounds.set([center.x,center.y,f.radiusNM*M_PER_NM*center.meterScale,feetToMeters(f.lowerFeet ?? 0)],i*4);
+          heights.set([feetToMeters(f.upperFeet ?? 0),(f.lowerFeet==null||f.lowerRef==="AGL")?1:0,(f.upperFeet==null||f.upperRef==="AGL")?1:0,0],i*4);
         });
         gl.uniform1i(gl.getUniformLocation(program,"u_fix_count"),fixes.length);
         gl.uniform4fv(gl.getUniformLocation(program,"u_fix_bounds[0]"),bounds);
@@ -5026,7 +5094,7 @@
     function ensureCurtainOutsideFixLayer() {
       map.addLayer({id:"route-curtain-outside-fixes",type:"custom",renderingMode:"3d",render(gl,options){
         if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG || route3DLayerState.disabled || !route3DLayerState.heightMapReady)return;
-        const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0&&f.lowerFeet!=null&&f.upperFeet!=null).slice(0,64);
+        const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0).slice(0,64);
         if(!fixes.length)return;
         const matrix=extractProjectionMatrix(options),program=route3DLayerState.curtainProgram;
         if(!matrix||!program)return;
@@ -5072,7 +5140,7 @@
           const halfWidth=(5*96/72)/(512*Math.pow(2,map.getZoom()))/2;
           const vertex=p=>vertices.push(p.x,p.y,p.z);
           for(const fix of customFixes){
-            if(!fix.saved||fix.radiusNM<=0||fix.lowerFeet==null||fix.upperFeet==null)continue;
+            if(!fix.saved||fix.radiusNM<=0)continue;
             const ring=fixCircle(fix),lower=[],upper=[];
             let valid=true;
             for(const [lon,lat] of ring){
@@ -5095,14 +5163,21 @@
           gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.DYNAMIC_DRAW);
           const location=gl.getAttribLocation(this.program,"a_pos");gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);
           gl.uniformMatrix4fv(gl.getUniformLocation(this.program,"u_matrix"),false,matrix);
-          gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+          gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
           gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,.3);
           gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);
           gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(outlines),gl.DYNAMIC_DRAW);
           gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
           gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1);
           gl.drawArrays(gl.TRIANGLES,0,outlines.length/3);
-          gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);
+          gl.disable(gl.POLYGON_OFFSET_FILL);
+          const intersections=buildFixCurtainIntersectionLines();
+          if(intersections.length){
+            gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(intersections),gl.DYNAMIC_DRAW);
+            gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
+            gl.lineWidth(1);gl.drawArrays(gl.LINES,0,intersections.length/3);
+          }
+          gl.depthMask(true);gl.enable(gl.DEPTH_TEST);
         },
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
