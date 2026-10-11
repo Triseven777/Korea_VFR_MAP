@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.01</title>
+  <title>KoreaVFR_v2.02</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -133,8 +133,9 @@
 
     /* Map leg label: pentagon arrow badge sitting directly on route line. */
     .leg-label {
-      width: 68px;
-      height: 34px;
+      width: 56px;
+      height: 28px;
+      opacity: .8;
       color: #fff;
       user-select: none;
       pointer-events: none;
@@ -147,8 +148,8 @@
 
     .leg-arrow-badge {
       position: relative;
-      width: 62px;
-      height: 30px;
+      width: 50px;
+      height: 24px;
       transform-origin: 50% 50%;
     }
 
@@ -165,7 +166,7 @@
       position: absolute;
       left: 0;
       top: 0;
-      width: calc(100% - 10px);
+      width: calc(100% - 8px);
       height: 100%;
       display: flex;
       flex-direction: column;
@@ -974,7 +975,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.01 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.02 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1021,6 +1022,10 @@
 
     <label class="popup-label" for="pointNameInput">포인트 이름</label>
     <input id="pointNameInput" class="popup-input" type="text" maxlength="40" placeholder="포인트 이름 입력" />
+
+    <label class="popup-label" for="pointAltitudeInput">통과고도 (FT MSL)</label>
+    <input id="pointAltitudeInput" class="popup-input" type="number" min="0" max="60000" step="100" inputmode="numeric" />
+    <div id="pointAltitudeError" role="alert" style="color:#ffb4b4;font-size:12px" hidden>0~60,000 ft 범위로 입력하세요.</div>
 
     <button id="samePointBtn" class="same-point-btn" type="button" hidden>출발/도착 동일</button>
 
@@ -1140,6 +1145,8 @@
     const popup = document.getElementById("pointPopup");
     const popupTitle = document.getElementById("popupTitle");
     const pointNameInput = document.getElementById("pointNameInput");
+    const pointAltitudeInput = document.getElementById("pointAltitudeInput");
+    const pointAltitudeError = document.getElementById("pointAltitudeError");
     const popupClose = document.getElementById("popupClose");
     const popupSave = document.getElementById("popupSave");
     const popupDelete = document.getElementById("popupDelete");
@@ -1706,6 +1713,7 @@
         render(gl, matrixLike) {
           aircraftProjectionMatrix = extractProjectionMatrix(matrixLike);
           updateAircraftMarkerVisuals(aircraftProjectionMatrix);
+          updateAllLegBadgeRotations();
         }
       });
     }
@@ -1803,7 +1811,9 @@
         return false;
       }
 
-      for (let i = pointIndex; i < route.length; i++) {
+      // Only VIA points inherit forward changes. Endpoints stay independent.
+      route[pointIndex].altitudeMslFeet = altitude;
+      for (let i = pointIndex + 1; i < route.length - 1; i++) {
         route[i].altitudeMslFeet = altitude;
       }
 
@@ -1811,6 +1821,7 @@
 
       syncVisibleRouteAltitudeInputs(pointIndex + 1);
       syncRouteAltitudeLabels();
+      updateAllLegBadgeRotations();
       invalidateRoute3DGeometry();
       refreshRoute3D();
 
@@ -3755,7 +3766,7 @@
         element: wrap,
         anchor: "left",
         offset: [-12, 0],
-        draggable: true
+        draggable: index > 0 && index < route.length - 1
       })
       .setLngLat([point.longitude, point.latitude])
       .addTo(map);
@@ -3961,6 +3972,23 @@
       .addTo(map);
 
       const updateLegBadgeRotation = () => {
+        el.style.display = map.getZoom() < LEG_BADGE_MIN_ZOOM ? "none" : "flex";
+        const midpoint = interpolateRouteLocation(a, b, 0.5);
+        marker.setLngLat([midpoint.longitude, midpoint.latitude]);
+        if (map.getPitch() > TOP_VIEW_PITCH_THRESHOLD_DEG) {
+          const altitude = ((routePointAltitudeFeet(a) ?? 0) + (routePointAltitudeFeet(b) ?? 0)) / 2;
+          const air = projectLngLatAltitude(midpoint.longitude, midpoint.latitude, feetToMeters(altitude));
+          const groundMeters = terrainElevationMeters(midpoint.latitude, midpoint.longitude);
+          const ground = groundMeters == null ? null
+            : projectLngLatAltitude(midpoint.longitude, midpoint.latitude, groundMeters);
+          if (air && ground && air.clipW > 0) {
+            marker.setOffset([air.x - ground.x, air.y - ground.y - 16]);
+          } else {
+            el.style.display = "none";
+          }
+        } else {
+          marker.setOffset([0, 0]);
+        }
         const routeAngle = screenLegAngleDegrees(a, b);
         const textAngle = normalizedReadableTextRotation(routeAngle);
 
@@ -3989,6 +4017,27 @@
       legMarkers.push(marker);
     }
 
+    const LEG_BADGE_MIN_ZOOM = 10;
+
+    function resolveRouteLabelCollisions() {
+      // Reset before measuring so zooming back in restores the default layout.
+      const descriptions = pointMarkers.map(marker => marker.getElement().querySelector(".route-point-coords")).filter(Boolean);
+      descriptions.forEach(el => { el.style.transform = ""; });
+      const badges = legMarkers.map(marker => marker.getElement()).filter(el => el.style.display !== "none").map(el => el.getBoundingClientRect());
+      descriptions.forEach(el => {
+        let rect = el.getBoundingClientRect();
+        let shift = 0;
+        for (let pass = 0; pass < badges.length; pass++) {
+          const hit = badges.find(b => rect.left < b.right + 4 && rect.right > b.left - 4 && rect.top < b.bottom + 4 && rect.bottom > b.top - 4);
+          if (!hit) break;
+          const delta = hit.bottom + 6 - rect.top;
+          shift += delta;
+          rect = {left:rect.left,right:rect.right,top:rect.top+delta,bottom:rect.bottom+delta};
+        }
+        if (shift > 0) el.style.transform = `translateY(${shift}px)`;
+      });
+    }
+
     function updateAllLegBadgeRotations() {
       for (const marker of legMarkers) {
         const el = marker.getElement?.();
@@ -3996,6 +4045,7 @@
           el._updateLegBadgeRotation();
         }
       }
+      resolveRouteLabelCollisions();
     }
 
     function renderRoute(options = {}) {
@@ -4012,6 +4062,7 @@
       }
 
       updateRouteInfo(options);
+      updateAllLegBadgeRotations();
       refreshRoute3D();
     }
 
@@ -4087,6 +4138,8 @@
       const index = route.findIndex(p => p.id === pointId);
       popupTitle.textContent = `${displayPointName(point, index)} 설정`;
       pointNameInput.value = point.name || "";
+      pointAltitudeInput.value = String(routePointAltitudeFeet(point) ?? 0);
+      pointAltitudeError.hidden = true;
       samePointBtn.hidden = !(route.length === 1 && index === 0);
 
       const rect = markerElement.getBoundingClientRect();
@@ -4097,7 +4150,7 @@
       );
       const top = Math.min(
         Math.max(10, rect.top - 10),
-        window.innerHeight - 180
+        window.innerHeight - 290
       );
 
       popup.style.left = `${left}px`;
@@ -4117,6 +4170,12 @@
       const point = route.find(p => p.id === selectedPointId);
       if (!point) return;
 
+      if (pointAltitudeInput.value.trim() === "" ||
+          !setRoutePointAltitudeMslFeet(point.id, pointAltitudeInput.value)) {
+        pointAltitudeError.hidden = false;
+        pointAltitudeInput.focus();
+        return;
+      }
       point.name = pointNameInput.value.trim();
       closePointPopup();
 
@@ -4379,6 +4438,7 @@
     });
 
     map.on("zoom", () => {
+      updateAllLegBadgeRotations();
       updateAircraftMarkerVisuals();
       if (!programmaticFollowUpdate) {
         suppressFollowUntil = performance.now() + 300;
