@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.04</title>
+  <title>KoreaVFR_v2.05</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -988,7 +988,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.04 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.05 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -4073,6 +4073,7 @@
         }
       }
       resolveRouteLabelCollisions();
+      resolveFixLabelCollisions();
     }
 
     function renderRoute(options = {}) {
@@ -4490,6 +4491,8 @@
       // Add the experimental curtain only after the ordinary map layers and
       // terrain are alive. Failure here must not take the base map down.
       safeEnsureRoute3DLayer();
+      // Composite translucent fix volumes after the route curtain.
+      if (map.getLayer("custom-fix-volume")) map.moveLayer("custom-fix-volume");
       await ensureAirportLayers();
 
       // Explicitly enable MapLibre's native iPad gestures.
@@ -4802,6 +4805,22 @@
         fixModeActive = true; fixModeBtn.classList.add("active");fixModeBtn.setAttribute("aria-pressed","true");
       }
     });
+    function resolveFixLabelCollisions() {
+      const routeRects = [...pointMarkers.map(m => m.getElement()),
+        ...legMarkers.map(m => m.getElement()).filter(el => el.style.display !== "none")]
+        .map(el => el.getBoundingClientRect());
+      for (const fix of customFixes) {
+        const label = fixMarkers.get(fix.id)?.getElement().querySelector(".custom-fix-name");
+        if (!label) continue;
+        label.style.visibility = "visible";
+        const rect = label.getBoundingClientRect();
+        const linked = route.some(p => p.customFixId === fix.id ||
+          (Math.abs(p.latitude - fix.latitude) < 1e-7 && Math.abs(p.longitude - fix.longitude) < 1e-7));
+        const overlap = routeRects.some(r => rect.left < r.right + 4 && rect.right > r.left - 4 && rect.top < r.bottom + 4 && rect.bottom > r.top - 4);
+        label.style.visibility = linked || overlap ? "hidden" : "visible";
+      }
+    }
+
     function fixCircle(fix) {
       const coordinates = [];
       for (let i = 0; i <= 96; i++) {
@@ -4944,13 +4963,22 @@
     fixInput("fixDestination").addEventListener("click",()=>setFixRouteRole("destination"));
     function updateCustomFixSource() {
       map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
+      resolveFixLabelCollisions();
       map.triggerRepaint();
     }
     function ensureCustomFixLayers() {
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
       map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
       map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72}});
-      map.on("pitch",()=>map.setPaintProperty("custom-fix-outline","line-width",(map.getPitch()>TOP_VIEW_PITCH_THRESHOLD_DEG?1:5)*96/72));
+      const updateFixGroundStyle = () => {
+        const pitched = map.getPitch() > TOP_VIEW_PITCH_THRESHOLD_DEG;
+        map.setPaintProperty("custom-fix-outline","line-width",(pitched ? 1 : 5)*96/72);
+        // In 3D, the ground footprint is only a reference outline.
+        // The actual volume is bounded by the entered lower and upper altitude.
+        map.setPaintProperty("custom-fix-fill","fill-opacity",pitched ? 0 : 0.3);
+      };
+      map.on("pitch", updateFixGroundStyle);
+      updateFixGroundStyle();
       map.addLayer({id:"custom-fix-volume",type:"custom",renderingMode:"3d",
         onAdd(instance,gl){
           this.program=linkRoute3DProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;uniform vec4 u_color;out vec4 fragColor;void main(){fragColor=u_color;}`);
