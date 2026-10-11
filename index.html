@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.08</title>
+  <title>KoreaVFR_v2.10</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -998,7 +998,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.08 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.10 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -3783,6 +3783,27 @@
       });
     }
 
+    const FIX_SNAP_RADIUS_PX = 32;
+    const FIX_DETACH_RADIUS_PX = 48;
+    function nearestRouteSnapFix(lngLat) {
+      const pointer=map.project([lngLat.lng,lngLat.lat]);
+      let nearest=null,best=FIX_SNAP_RADIUS_PX;
+      for(const fix of customFixes){
+        if(!fix.saved)continue;
+        const position=map.project([fix.longitude,fix.latitude]);
+        const distance=Math.hypot(pointer.x-position.x,pointer.y-position.y);
+        if(distance<=best){nearest=fix;best=distance;}
+      }
+      return nearest;
+    }
+    function linkedFixDragPosition(point,lngLat,alreadyDetached) {
+      const fix=customFixes.find(f=>f.id===point.customFixId&&f.saved);
+      if(!fix || alreadyDetached)return {lngLat,detached:alreadyDetached};
+      const origin=map.project([fix.longitude,fix.latitude]),candidate=map.project([lngLat.lng,lngLat.lat]);
+      const detached=Math.hypot(candidate.x-origin.x,candidate.y-origin.y)>FIX_DETACH_RADIUS_PX;
+      return {lngLat:detached?lngLat:{lng:fix.longitude,lat:fix.latitude},detached};
+    }
+
     function createPointMarker(point, index) {
       const wrap = document.createElement("div");
       wrap.className = "route-point-wrap";
@@ -3817,6 +3838,7 @@
       // We set a synchronous guard on pointerdown without stopping propagation,
       // so MapLibre Marker can still start its native draggable behavior.
       let markerWasDragged = false;
+      let detachedFromFix = false;
 
       wrap.addEventListener("pointerdown", () => {
         pointPointerActive = true;
@@ -3883,6 +3905,7 @@
 
       marker.on("dragstart", () => {
         markerWasDragged = true;
+        detachedFromFix = false;
         pointPointerActive = true;
         suppressNextRouteDrag = true;
         closePointPopup();
@@ -3891,11 +3914,16 @@
       });
 
       marker.on("drag", () => {
+        const position=linkedFixDragPosition(point,marker.getLngLat(),detachedFromFix);
+        detachedFromFix=position.detached;
+        marker.setLngLat(position.lngLat);
         updatePointDragPreview();
       });
 
       marker.on("dragend", () => {
-        const ll = marker.getLngLat();
+        const position=linkedFixDragPosition(point,marker.getLngLat(),detachedFromFix);
+        const ll = position.lngLat;
+        detachedFromFix=position.detached;
         const currentIndex = route.findIndex(p => p.id === point.id);
         const target = route[currentIndex];
 
@@ -3911,6 +3939,10 @@
 
         target.longitude = ll.lng;
         target.latitude = ll.lat;
+        if(detachedFromFix && target.customFixId != null){
+          delete target.customFixId;
+          target.name = ""; // Existing numbered waypoint rendering supplies the label.
+        }
 
         if (sameOriginDestination && route.length >= 2) {
           if (currentIndex === 0) {
@@ -4628,10 +4660,14 @@
         const a = route[i];
         const b = route[i + 1];
         if (!a || !b) return;
+        const fix=nearestRouteSnapFix(lngLat);
+        dragState.snapFixId=fix?.id ?? null;
+        const previewLocation=fix?{lng:fix.longitude,lat:fix.latitude}:lngLat;
+        dragHint.textContent=fix?`FIX ${fix.name}에 연결` : "루트를 원하는 위치까지 드래그한 뒤 놓으세요";
 
         setPreview([
           [a.longitude, a.latitude],
-          [lngLat.lng, lngLat.lat],
+          [previewLocation.lng, previewLocation.lat],
           [b.longitude, b.latitude]
         ]);
       }
@@ -4641,6 +4677,7 @@
         dragState.segmentIndex = -1;
         dragState.currentLngLat = null;
         dragState.source = null;
+        dragState.snapFixId = null;
         dragState.longPressCancelled = false;
         dragState.touchStartTime = null;
         dragState.touchMoved = false;
@@ -4676,13 +4713,18 @@
         }
 
         const inheritedAltitude = routePointAltitudeFeet(route[i]) ?? 0;
-
+        const fix=nearestRouteSnapFix(p);
+        // Do not insert the same fix immediately next to itself.
+        if(fix && (route[i].customFixId===fix.id || route[i+1].customFixId===fix.id)){
+          cancelRouteDrag();return;
+        }
         route.splice(i + 1, 0, {
           id: nextPointId++,
-          name: "",
+          name: fix?.name ?? "",
           altitudeMslFeet: inheritedAltitude,
-          longitude: p.lng,
-          latitude: p.lat
+          longitude: fix?.longitude ?? p.lng,
+          latitude: fix?.latitude ?? p.lat,
+          ...(fix?{customFixId:fix.id}:{})
         });
 
         cancelRouteDrag();
@@ -5133,17 +5175,18 @@
 
     function ensureCustomFixLayers() {
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
-      map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
+      map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0}});
       map.addLayer({id:"custom-fix-shadow",type:"fill",source:"custom-fix-areas",filter:["==",["get","floating"],true],paint:{"fill-color":"#000000","fill-opacity":0}});
-      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72}});
+      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72,"line-opacity":0}});
       let lastFixTopView=null;
       const updateFixGroundStyle = () => {
         const top=isFixTopView();
         if(top===lastFixTopView)return;
         lastFixTopView=top;
         map.setPaintProperty("custom-fix-outline","line-width",5*96/72);
-        map.setPaintProperty("custom-fix-outline","line-opacity",top?1:0);
-        map.setPaintProperty("custom-fix-fill","fill-opacity",top?0.3:0);
+        // Surface and outline are drawn by one custom renderer in both views.
+        map.setPaintProperty("custom-fix-outline","line-opacity",0);
+        map.setPaintProperty("custom-fix-fill","fill-opacity",0);
         map.setPaintProperty("custom-fix-shadow","fill-opacity",top?0:0.3);
       };
       for(const event of ["pitch","pitchend","moveend","idle"])map.on(event,updateFixGroundStyle);
@@ -5154,8 +5197,7 @@
           this.buffer=gl.createBuffer();
         },
         render(gl,options){
-          updateFixGroundStyle();
-          if(isFixTopView())return;
+          const topView=isFixTopView();
           const matrix=extractProjectionMatrix(options);if(!matrix)return;
           const vertices=[], outlines=[],bottomOutlines=[];
           const halfWidth=(5*96/72)/(512*Math.pow(2,map.getZoom()))/2;
@@ -5165,7 +5207,10 @@
             const ring=fixCircle(fix),lower=[],upper=[];
             let valid=true;
             for(const [lon,lat] of ring){
-              const lo=fixAltitudeMeters(fix,fix.lowerFeet,fix.lowerRef,lat,lon),hi=fixAltitudeMeters(fix,fix.upperFeet,fix.upperRef,lat,lon);
+              // Top View uses a complete footprint regardless of altitude/DEM readiness.
+              const ground=terrainElevationMeters(lat,lon)??0;
+              const lo=topView?ground:fixAltitudeMeters(fix,fix.lowerFeet,fix.lowerRef,lat,lon);
+              const hi=topView?ground:fixAltitudeMeters(fix,fix.upperFeet,fix.upperRef,lat,lon);
               if(lo==null||hi==null||hi<lo){valid=false;break;}
               lower.push(mercatorData(lon,lat,lo));upper.push(mercatorData(lon,lat,hi));
             }
@@ -5178,9 +5223,14 @@
               outlines.push(...p,...q,...r,...r,...q,...t);
               const la=lower[i],lb=lower[i+1],bx=nx/5,by=ny/5;
               const lp=[la.x+bx,la.y+by,la.z],lq=[la.x-bx,la.y-by,la.z],lr=[lb.x+bx,lb.y+by,lb.z],lt=[lb.x-bx,lb.y-by,lb.z];
-              bottomOutlines.push(...lp,...lq,...lr,...lr,...lq,...lt);
-              vertex(lower[i]);vertex(lower[i+1]);vertex(upper[i]);vertex(upper[i]);vertex(lower[i+1]);vertex(upper[i+1]);
-              if(i>0&&i<ring.length-2){vertex(upper[0]);vertex(upper[i]);vertex(upper[i+1]);vertex(lower[0]);vertex(lower[i+1]);vertex(lower[i]);}
+              if(!topView) {
+                bottomOutlines.push(...lp,...lq,...lr,...lr,...lq,...lt);
+                vertex(lower[i]);vertex(lower[i+1]);vertex(upper[i]);vertex(upper[i]);vertex(lower[i+1]);vertex(upper[i+1]);
+              }
+              if(i>0&&i<ring.length-2){
+                vertex(upper[0]);vertex(upper[i]);vertex(upper[i+1]);
+                if(!topView){vertex(lower[0]);vertex(lower[i+1]);vertex(lower[i]);}
+              }
             }
           }
           if(!vertices.length)return;
@@ -5197,7 +5247,7 @@
           gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(bottomOutlines),gl.DYNAMIC_DRAW);
           gl.drawArrays(gl.TRIANGLES,0,bottomOutlines.length/3);
           gl.disable(gl.POLYGON_OFFSET_FILL);
-          const intersections=buildFixCurtainIntersectionLines();
+          const intersections=topView?[]:buildFixCurtainIntersectionLines();
           if(intersections.length){
             gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(intersections),gl.DYNAMIC_DRAW);
             gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
