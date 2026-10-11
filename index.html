@@ -56,7 +56,7 @@
       }
 
       .leg-label-distance,
-      .leg-label-bearing {
+      .leg-label-altitude {
         font-size: 9.5px;
         font-weight: 400;
       }
@@ -131,64 +131,81 @@
       line-height: 1.15;
     }
 
-    /* Map leg label: compact arrow graphic, no black information box. */
+    /* Map leg label: pentagon arrow badge sitting directly on route line. */
     .leg-label {
-      width: 96px;
+      width: 92px;
+      height: 46px;
       color: #fff;
-      white-space: nowrap;
       user-select: none;
       pointer-events: none;
-      text-align: center;
       font-family: Arial, sans-serif;
-      text-shadow:
-        0 1px 2px rgba(0,0,0,.95),
-        0 0 3px rgba(0,0,0,.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.65));
+    }
+
+    .leg-arrow-badge {
+      position: relative;
+      width: 86px;
+      height: 42px;
+      box-sizing: border-box;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      align-items: center;
+      justify-items: center;
+      padding: 5px 15px 5px 8px;
+      background: rgba(18,18,18,.88);
+      border: 1px solid rgba(255,255,255,.88);
+      clip-path: polygon(
+        0 0,
+        calc(100% - 12px) 0,
+        100% 50%,
+        calc(100% - 12px) 100%,
+        0 100%
+      );
+    }
+
+    .leg-arrow-badge {
+      transform-origin: 50% 50%;
+    }
+
+    .leg-label-content {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      align-items: center;
+      justify-items: center;
+      transform-origin: 50% 50%;
+    }
+
+    /* Inner border/highlight so the arrow edge stays readable on imagery. */
+    .leg-arrow-badge::after {
+      content: "";
+      position: absolute;
+      inset: 2px 4px 2px 2px;
+      pointer-events: none;
+      clip-path: polygon(
+        0 0,
+        calc(100% - 11px) 0,
+        100% 50%,
+        calc(100% - 11px) 100%,
+        0 100%
+      );
+      border: 1px solid rgba(255,255,255,.18);
     }
 
     .leg-label-distance,
-    .leg-label-bearing {
-      font-size: 9.5px;
-      line-height: 1.05;
-      font-weight: 400;
-    }
-
-    .leg-label-distance {
-      margin-bottom: 3px;
-    }
-
-    .leg-label-bearing {
-      margin-top: 3px;
-    }
-
-    .leg-label-arrow {
+    .leg-label-altitude {
       position: relative;
-      width: 88px;
-      height: 8px;
-      margin: 0 auto;
-    }
-
-    .leg-label-arrow::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      right: 7px;
-      top: 3px;
-      height: 1px;
-      background: rgba(255,255,255,.95);
-      box-shadow: 0 1px 2px rgba(0,0,0,.8);
-    }
-
-    .leg-label-arrow::after {
-      content: "";
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: 0;
-      height: 0;
-      border-left: 8px solid rgba(255,255,255,.98);
-      border-top: 4px solid transparent;
-      border-bottom: 4px solid transparent;
-      filter: drop-shadow(0 1px 1px rgba(0,0,0,.7));
+      z-index: 1;
+      font-size: 9.5px;
+      line-height: 1;
+      font-weight: 400;
+      white-space: nowrap;
+      text-align: center;
+      text-shadow: 0 1px 2px rgba(0,0,0,.9);
     }
 
     .point-popup {
@@ -3833,6 +3850,57 @@
       pointMarkers.push(marker);
     }
 
+    function screenLegAngleDegrees(a, b) {
+      const pa = map.project([a.longitude, a.latitude]);
+      const pb = map.project([b.longitude, b.latitude]);
+
+      const dx = pb.x - pa.x;
+      const dy = pb.y - pa.y;
+
+      if (!Number.isFinite(dx) || !Number.isFinite(dy)) {
+        return 0;
+      }
+
+      // Screen coordinates: +X right, +Y down.
+      return Math.atan2(dy, dx) * 180 / Math.PI;
+    }
+
+    function normalizedReadableTextRotation(routeAngleDeg) {
+      // Keep text upright. Text follows the route axis, but never appears
+      // upside-down. This means a westbound leg keeps its arrow pointing west,
+      // while the text inside is corrected by 180 degrees.
+      let angle = routeAngleDeg;
+
+      while (angle > 180) angle -= 360;
+      while (angle <= -180) angle += 360;
+
+      if (angle > 90) {
+        return angle - 180;
+      }
+
+      if (angle < -90) {
+        return angle + 180;
+      }
+
+      return angle;
+    }
+
+    function legPlannedAltitudeFeet(a, b) {
+      const aAlt = Number(a?.altitudeMslFeet);
+      const bAlt = Number(b?.altitudeMslFeet);
+
+      if (Number.isFinite(aAlt) && Number.isFinite(bAlt)) {
+        // Leg altitude label follows the leg's planned MSL.
+        // If endpoints differ, use the departure-side altitude because the
+        // current route model propagates altitude forward by design.
+        return aAlt;
+      }
+
+      if (Number.isFinite(aAlt)) return aAlt;
+      if (Number.isFinite(bAlt)) return bAlt;
+      return 0;
+    }
+
     function createLegMarker(a, b) {
       const leg = legData(a, b);
 
@@ -3840,14 +3908,17 @@
       el.className = "leg-label";
 
       const distanceText = `${leg.distanceNM.toFixed(2)} NM`;
-      const bearingText = leg.bearingMagnetic == null
-        ? "MAG ERR"
-        : `${String(Math.round(leg.bearingMagnetic)).padStart(3,"0")}°M`;
+      const altitudeFeet = legPlannedAltitudeFeet(a, b);
+      const altitudeText =
+        `${Math.round(altitudeFeet).toLocaleString("en-US")} ft`;
 
       el.innerHTML = `
-        <div class="leg-label-distance">${distanceText}</div>
-        <div class="leg-label-arrow" aria-hidden="true"></div>
-        <div class="leg-label-bearing">${bearingText}</div>
+        <div class="leg-arrow-badge">
+          <div class="leg-label-content">
+            <div class="leg-label-distance">${distanceText}</div>
+            <div class="leg-label-altitude">${altitudeText}</div>
+          </div>
+        </div>
       `;
 
       const marker = new maplibregl.Marker({
@@ -3858,7 +3929,42 @@
       .setLngLat([leg.midpoint.longitude, leg.midpoint.latitude])
       .addTo(map);
 
+      const updateLegBadgeRotation = () => {
+        const routeAngle = screenLegAngleDegrees(a, b);
+        const textAngle = normalizedReadableTextRotation(routeAngle);
+
+        const badge = el.querySelector(".leg-arrow-badge");
+        const content = el.querySelector(".leg-label-content");
+
+        if (badge) {
+          // Pentagon arrow head always follows actual leg direction.
+          badge.style.transform = `rotate(${routeAngle}deg)`;
+        }
+
+        if (content) {
+          // Counter-rotate only enough to prevent upside-down text while
+          // retaining the route-axis orientation shown in the reference.
+          content.style.transform =
+            `rotate(${textAngle - routeAngle}deg)`;
+        }
+      };
+
+      updateLegBadgeRotation();
+
+      // The apparent screen angle changes when the map bearing/pitch changes,
+      // so update the badge orientation with camera movement.
+      el._updateLegBadgeRotation = updateLegBadgeRotation;
+
       legMarkers.push(marker);
+    }
+
+    function updateAllLegBadgeRotations() {
+      for (const marker of legMarkers) {
+        const el = marker.getElement?.();
+        if (el && typeof el._updateLegBadgeRotation === "function") {
+          el._updateLegBadgeRotation();
+        }
+      }
     }
 
     function renderRoute(options = {}) {
@@ -4078,6 +4184,14 @@
       updateCompassRotation();
     });
 
+    map.on("rotate", () => {
+      updateAllLegBadgeRotations();
+    });
+
+    map.on("move", () => {
+      updateAllLegBadgeRotations();
+    });
+
     map.on("zoom", () => {
       updateAircraftMarkerVisuals();
     });
@@ -4214,6 +4328,7 @@
 
     map.on("pitch", () => {
       updateGroundRouteVisibility();
+      updateAllLegBadgeRotations();
       updateAircraftMarkerVisuals();
       if (!programmaticFollowUpdate) {
         suppressFollowUntil = performance.now() + 300;

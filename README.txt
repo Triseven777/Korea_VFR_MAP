@@ -1,23 +1,15 @@
-Korea VFR Moving Map v50
-Route Map Label Redesign
+Korea VFR Moving Map v52
+Rotating Leg Pentagon Badge
 
-1. Point labels
-- If point has a name:
-  - show point name
-  - hide latitude/longitude
-- If point has no name:
-  - keep latitude/longitude
-- If planned altitude > 0 ft:
-  - show altitude on a separate line
-  - comma formatted, e.g. 1,500 ft
-- Default 0 ft is not shown as an altitude label.
-
-2. Leg labels
-- Replaced black rectangular distance/bearing box with arrow-style graphic.
-- Distance above arrow.
-- Magnetic bearing below arrow.
-- Font size reduced to ~80% of previous 12 px size (9.5 px).
-- Font weight changed from bold 700 to normal 400.
-- White arrow with subtle shadow for readability over satellite imagery.
-
-3D curtain / terrain / route geometry from v49 is unchanged.
+Changes
+- Pentagon badge arrow head follows the actual screen direction of each leg.
+- Badge rotates dynamically when map bearing/pitch/camera changes.
+- Text follows the route axis but is never allowed to appear upside-down:
+  when route direction crosses the +/-90 degree readability boundary,
+  text receives a 180 degree readability correction while the arrow head
+  still points in the true leg direction.
+- Leg label contents changed to:
+  line 1: distance (e.g. 4.91 NM)
+  line 2: planned MSL altitude (e.g. 3,000 ft)
+- Magnetic bearing removed from the map leg badge.
+- 3D curtain and all v51/v50 route behavior otherwise unchanged.
