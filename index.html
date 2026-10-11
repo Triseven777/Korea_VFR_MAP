@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.03</title>
+  <title>KoreaVFR_v2.04</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -988,7 +988,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.03 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.04 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1078,14 +1078,15 @@
 
 
     <section id="fixPopup" hidden aria-label="커스텀 픽스 설정">
-      <div style="display:flex;justify-content:space-between"><strong>FIX 설정 · 임시 저장</strong><button id="fixClose" class="popup-btn">닫기</button></div>
+      <div style="display:flex;justify-content:space-between"><strong>FIX 설정 · 임시 저장</strong><button id="fixClose" class="popup-close" aria-label="닫기">×</button></div>
       <label for="fixName">픽스 명</label><input id="fixName" maxlength="40" />
       <label>좌표</label><div id="fixCoordinates"></div>
       <label for="fixRadius">범위 (반경 NM)</label><input id="fixRadius" type="number" min="0" max="200" step="0.1" value="0" />
       <label for="fixUpper">상단고도 (ft)</label><div class="fix-alt-row"><input id="fixUpper" type="number" min="0" max="60000" /><button id="fixUpperRef" type="button">MSL</button></div>
       <label for="fixLower">하단고도 (ft)</label><div class="fix-alt-row"><input id="fixLower" type="number" min="0" max="60000" /><button id="fixLowerRef" type="button">MSL</button></div>
       <div id="fixError" role="status"></div>
-      <div class="popup-actions"><button id="fixSave" class="popup-btn popup-save">저장</button><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
+      <div style="display:flex;gap:6px;margin-top:14px"><button id="fixDeparture" class="popup-btn">출발지 설정</button><button id="fixVia" class="popup-btn">경유지 설정</button><button id="fixDestination" class="popup-btn">도착지 설정</button></div>
+      <div class="popup-actions"><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
     </section>
     <script type="module">
   import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
@@ -4797,7 +4798,9 @@
       fixModeActive = !fixModeActive;
       fixModeBtn.classList.toggle("active", fixModeActive);
       fixModeBtn.setAttribute("aria-pressed", String(fixModeActive));
-      if (!fixModeActive) closeFixPopup();
+      if (!fixModeActive && selectedFix && !saveCurrentFix()) {
+        fixModeActive = true; fixModeBtn.classList.add("active");fixModeBtn.setAttribute("aria-pressed","true");
+      }
     });
     function fixCircle(fix) {
       const coordinates = [];
@@ -4828,6 +4831,7 @@
       return "";
     }
     function openFixPopup(fix) {
+      if (selectedFix && selectedFix !== fix && !saveCurrentFix()) return;
       selectedFix = fix;
       fixInput("fixName").value = fix.name;
       fixInput("fixRadius").value = fix.radiusNM;
@@ -4840,9 +4844,8 @@
       fixPopup.hidden = false;
     }
     function closeFixPopup() {
-      if (selectedFix && !selectedFix.saved) removeCustomFix(selectedFix.id);
-      selectedFix = null;
-      fixPopup.hidden = true;
+      if (selectedFix) saveCurrentFix();
+      else fixPopup.hidden = true;
     }
     function removeCustomFix(id) {
       const index = customFixes.findIndex(f => f.id === id);
@@ -4851,8 +4854,8 @@
       updateCustomFixSource();
     }
     function createCustomFix(lngLat) {
-      closeFixPopup();
-      const fix = {id: nextFixId++, name:"", latitude:lngLat.lat, longitude:lngLat.lng, radiusNM:0, lowerFeet:null, upperFeet:null, lowerRef:"MSL", upperRef:"MSL", saved:false};
+      if (selectedFix && !saveCurrentFix()) return;
+      const fix = {id: nextFixId++, name:`FIX ${nextFixId - 1}`, latitude:lngLat.lat, longitude:lngLat.lng, radiusNM:0, lowerFeet:null, upperFeet:null, lowerRef:"MSL", upperRef:"MSL", saved:false};
       customFixes.push(fix);
       const el = document.createElement("div"); el.className = "custom-fix-pin"; el.innerHTML = pinSvg;
       const name = document.createElement("span"); name.className = "custom-fix-name"; el.appendChild(name);
@@ -4901,18 +4904,44 @@
     for (const id of ["fixUpperRef","fixLowerRef"]) fixInput(id).addEventListener("click",()=>{fixInput(id).textContent=fixInput(id).textContent === "MSL" ? "AGL" : "MSL";});
     fixInput("fixClose").addEventListener("click",closeFixPopup);
     fixInput("fixDelete").addEventListener("click",()=>{if(selectedFix)removeCustomFix(selectedFix.id);selectedFix=null;fixPopup.hidden=true;});
-    fixInput("fixSave").addEventListener("click",()=>{
-      if(!selectedFix)return;
+    function saveCurrentFix() {
+      if(!selectedFix)return true;
       const numberOrNull=id=>fixInput(id).value.trim()===""?null:Number(fixInput(id).value);
       const candidate={...selectedFix,name:fixInput("fixName").value.trim(),radiusNM:Number(fixInput("fixRadius").value),upperFeet:numberOrNull("fixUpper"),lowerFeet:numberOrNull("fixLower"),upperRef:fixInput("fixUpperRef").textContent,lowerRef:fixInput("fixLowerRef").textContent};
-      const error=validateFix(candidate);if(error){fixInput("fixError").textContent=error;return;}
-      if ((candidate.upperRef === "AGL" || candidate.lowerRef === "AGL") && terrainElevationMeters(candidate.latitude,candidate.longitude) == null) {
-        showRuntimeStatus("커스텀 FIX: DEM 고도 미확인 — AGL 3D 영역은 지형 데이터 확보 후 표시됩니다.");
-      }
+      const error=validateFix(candidate);if(error){fixInput("fixError").textContent=error;return false;}
       Object.assign(selectedFix,candidate,{saved:true});
       fixMarkers.get(selectedFix.id).getElement().querySelector(".custom-fix-name").textContent=selectedFix.name;
       updateCustomFixSource();selectedFix=null;fixPopup.hidden=true;
-    });
+      fixModeActive=false;fixModeBtn.classList.remove("active");fixModeBtn.setAttribute("aria-pressed","false");
+      return true;
+    }
+    document.addEventListener("pointerdown",event=>{
+      if(fixPopup.hidden || fixPopup.contains(event.target) || fixModeBtn.contains(event.target))return;
+      if (!saveCurrentFix()) { event.preventDefault();event.stopPropagation();return; }
+      if(event.target === map.getCanvas()) suppressTapUntil=performance.now()+500;
+    },true);
+    function setFixRouteRole(role) {
+      if (!selectedFix) return;
+      const fix=selectedFix;
+      if(!saveCurrentFix())return;
+      const point={id:nextPointId++,name:fix.name,latitude:fix.latitude,longitude:fix.longitude,altitudeMslFeet:0,customFixId:fix.id};
+      routeModeActive=true;sameOriginDestination=false;pendingDestinationAirport=null;
+      if(role === "departure") {
+        if(route.length)route[0]=point;else route.push(point);
+      } else if(role === "destination") {
+        if(route.length>=2)route[route.length-1]=point;
+        else if(route.length===1)route.push(point);
+        else { pendingDestinationAirport={type:"Feature",geometry:{type:"Point",coordinates:[fix.longitude,fix.latitude]},properties:{nameKo:fix.name}}; }
+      } else {
+        if(route.length<2){showRuntimeStatus("경유지 설정: 출발지와 도착지를 먼저 지정하세요.");return;}
+        point.altitudeMslFeet=routePointAltitudeFeet(route[route.length-2])??0;
+        route.splice(route.length-1,0,point);
+      }
+      renderRoute({autoOpen:true});
+    }
+    fixInput("fixDeparture").addEventListener("click",()=>setFixRouteRole("departure"));
+    fixInput("fixVia").addEventListener("click",()=>setFixRouteRole("via"));
+    fixInput("fixDestination").addEventListener("click",()=>setFixRouteRole("destination"));
     function updateCustomFixSource() {
       map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
       map.triggerRepaint();
@@ -4920,16 +4949,18 @@
     function ensureCustomFixLayers() {
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
       map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
-      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":7*96/72}});
+      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72}});
+      map.on("pitch",()=>map.setPaintProperty("custom-fix-outline","line-width",(map.getPitch()>TOP_VIEW_PITCH_THRESHOLD_DEG?1:5)*96/72));
       map.addLayer({id:"custom-fix-volume",type:"custom",renderingMode:"3d",
         onAdd(instance,gl){
-          this.program=linkRoute3DProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;out vec4 fragColor;void main(){fragColor=vec4(1.0,0.57,0.0,0.3);}`);
+          this.program=linkRoute3DProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;uniform vec4 u_color;out vec4 fragColor;void main(){fragColor=u_color;}`);
           this.buffer=gl.createBuffer();
         },
         render(gl,options){
           if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG)return;
           const matrix=extractProjectionMatrix(options);if(!matrix)return;
-          const vertices=[];
+          const vertices=[], outlines=[];
+          const halfWidth=(5*96/72)/(512*Math.pow(2,map.getZoom()))/2;
           const vertex=p=>vertices.push(p.x,p.y,p.z);
           for(const fix of customFixes){
             if(!fix.saved||fix.radiusNM<=0||fix.lowerFeet==null||fix.upperFeet==null)continue;
@@ -4942,6 +4973,11 @@
             }
             if(!valid)continue;
             for(let i=0;i<ring.length-1;i++){
+              const a=upper[i],b=upper[i+1];
+              const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1;
+              const nx=-dy/len*halfWidth,ny=dx/len*halfWidth;
+              const p=[a.x+nx,a.y+ny,a.z],q=[a.x-nx,a.y-ny,a.z],r=[b.x+nx,b.y+ny,b.z],t=[b.x-nx,b.y-ny,b.z];
+              outlines.push(...p,...q,...r,...r,...q,...t);
               vertex(lower[i]);vertex(lower[i+1]);vertex(upper[i]);vertex(upper[i]);vertex(lower[i+1]);vertex(upper[i+1]);
               if(i>0&&i<ring.length-2){vertex(upper[0]);vertex(upper[i]);vertex(upper[i+1]);vertex(lower[0]);vertex(lower[i+1]);vertex(lower[i]);}
             }
@@ -4951,7 +4987,13 @@
           const location=gl.getAttribLocation(this.program,"a_pos");gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);
           gl.uniformMatrix4fv(gl.getUniformLocation(this.program,"u_matrix"),false,matrix);
           gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
-          gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);gl.depthMask(true);
+          gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,.3);
+          gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);
+          gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(outlines),gl.DYNAMIC_DRAW);
+          gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
+          gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1);
+          gl.drawArrays(gl.TRIANGLES,0,outlines.length/3);
+          gl.disable(gl.POLYGON_OFFSET_FILL);gl.depthMask(true);
         },
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
