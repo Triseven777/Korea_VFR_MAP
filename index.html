@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.02</title>
+  <title>KoreaVFR_v2.03</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -969,13 +969,26 @@
       pointer-events: none;
     }
 
+    #fixModeBtn { position:absolute; right:0; bottom:55px; }
+    #fixModeBtn.active { background:rgba(34,84,165,.96); }
+    .custom-fix-pin { width:32px;height:40px;color:#ff9d32;cursor:pointer;touch-action:none; }
+    .custom-fix-pin svg { width:100%;height:100%;filter:drop-shadow(0 1px 2px #000); }
+    .custom-fix-name { position:absolute;top:40px;left:50%;transform:translateX(-50%);color:white;background:#172131dd;padding:3px 6px;border-radius:4px;font:12px Arial;white-space:nowrap; }
+    #fixPopup { position:fixed;right:80px;bottom:85px;z-index:1001;width:270px;max-width:calc(100vw - 40px);max-height:calc(100vh - 40px);overflow:auto;background:#142032f5;color:#fff;border:1px solid #ffffff66;border-radius:12px;padding:14px;font:14px Arial;box-sizing:border-box; }
+    #fixPopup[hidden] { display:none; }
+    #fixPopup label { display:block;margin:12px 0 5px; }
+    #fixPopup input { width:100%;box-sizing:border-box;background:#ffffff12;color:white;border:1px solid #ffffff66;border-radius:6px;padding:9px;font:15px Arial; }
+    .fix-alt-row { display:flex;gap:8px; }
+    .fix-alt-row button { min-width:60px;background:#244c7a;color:white;border:1px solid #ffffff66;border-radius:6px; }
+    #fixCoordinates { line-height:1.6; }
+    #fixError { color:#ffb98b;margin-top:8px; }
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.02 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.03 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1046,6 +1059,9 @@
       </svg>
     </button>
 
+    <button id="fixModeBtn" class="nav-control-btn" type="button" title="커스텀 픽스 설정" aria-label="커스텀 픽스 설정" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22S4 13 4 9a8 8 0 1 1 16 0c0 4-8 13-8 13Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
+    </button>
     <button id="orientationBtn" class="nav-control-btn" type="button" title="진북 정렬">
       <div class="compass-face" aria-hidden="true">
         <svg id="compassRotor" class="compass-rotor" viewBox="0 0 28 28">
@@ -1061,6 +1077,16 @@
   </div>
 
 
+    <section id="fixPopup" hidden aria-label="커스텀 픽스 설정">
+      <div style="display:flex;justify-content:space-between"><strong>FIX 설정 · 임시 저장</strong><button id="fixClose" class="popup-btn">닫기</button></div>
+      <label for="fixName">픽스 명</label><input id="fixName" maxlength="40" />
+      <label>좌표</label><div id="fixCoordinates"></div>
+      <label for="fixRadius">범위 (반경 NM)</label><input id="fixRadius" type="number" min="0" max="200" step="0.1" value="0" />
+      <label for="fixUpper">상단고도 (ft)</label><div class="fix-alt-row"><input id="fixUpper" type="number" min="0" max="60000" /><button id="fixUpperRef" type="button">MSL</button></div>
+      <label for="fixLower">하단고도 (ft)</label><div class="fix-alt-row"><input id="fixLower" type="number" min="0" max="60000" /><button id="fixLowerRef" type="button">MSL</button></div>
+      <div id="fixError" role="status"></div>
+      <div class="popup-actions"><button id="fixSave" class="popup-btn popup-save">저장</button><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
+    </section>
     <script type="module">
   import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
 
@@ -4456,6 +4482,7 @@
       terrainReady = true;
 
       ensureRouteLayers();
+      ensureCustomFixLayers();
       ensureAircraftProjectionLayer();
       updateGroundRouteVisibility();
 
@@ -4505,7 +4532,7 @@
       });
 
       function startRouteDrag(lngLat, source = "mouse", screenPoint = null) {
-        if (!routeModeActive) return false;
+        if (fixModeActive || !routeModeActive) return false;
         if (route.length < 2) return false;
         if (pointPointerActive || suppressNextRouteDrag) return false;
 
@@ -4700,6 +4727,7 @@
       function handleMapTap(e) {
         if (longPressSuppressed()) return;
         if (dragState.active) return;
+        if (fixModeActive) { createCustomFix(e.lngLat); return; }
         if (!routeModeActive) return;
 
         const features = map.queryRenderedFeatures(e.point, {
@@ -4754,6 +4782,180 @@
       map.on("click", handleMapTap);
     });
 
+
+    // Session-only custom fixes. No persistent storage in this release.
+    let fixModeActive = false;
+    let nextFixId = 1;
+    const customFixes = [];
+    const fixMarkers = new Map();
+    let selectedFix = null;
+    const fixPopup = document.getElementById("fixPopup");
+    const fixModeBtn = document.getElementById("fixModeBtn");
+    const fixInput = id => document.getElementById(id);
+    const pinSvg = `<svg viewBox="0 0 24 30"><path d="M12 29S2 17 2 11a10 10 0 0 1 20 0c0 6-10 18-10 18Z" fill="currentColor" stroke="white" stroke-width="1.2"/><circle cx="12" cy="11" r="4" fill="#142032"/></svg>`;
+    fixModeBtn.addEventListener("click", () => {
+      fixModeActive = !fixModeActive;
+      fixModeBtn.classList.toggle("active", fixModeActive);
+      fixModeBtn.setAttribute("aria-pressed", String(fixModeActive));
+      if (!fixModeActive) closeFixPopup();
+    });
+    function fixCircle(fix) {
+      const coordinates = [];
+      for (let i = 0; i <= 96; i++) {
+        const p = destinationPoint(fix.latitude, fix.longitude, i * 360 / 96, fix.radiusNM * M_PER_NM);
+        coordinates.push([p.longitude, p.latitude]);
+      }
+      coordinates[96] = [...coordinates[0]];
+      return coordinates;
+    }
+    function fixAltitudeMeters(fix, value, reference, latitude = fix.latitude, longitude = fix.longitude) {
+      if (value == null) return null;
+      const ground = reference === "AGL" ? terrainElevationMeters(latitude, longitude) : 0;
+      return ground == null ? null : feetToMeters(value) + ground;
+    }
+    function validateFix(fix) {
+      if (!fix.name.trim()) return "픽스 명을 입력하세요.";
+      if (!Number.isFinite(fix.radiusNM) || fix.radiusNM < 0 || fix.radiusNM > 200) return "반경은 0~200 NM으로 입력하세요.";
+      for (const value of [fix.lowerFeet, fix.upperFeet]) {
+        if (value != null && (!Number.isFinite(value) || value < 0 || value > 60000)) return "고도는 0~60,000 ft로 입력하세요.";
+      }
+      if (fix.lowerFeet != null && fix.upperFeet != null) {
+        if (fix.lowerRef === fix.upperRef && fix.upperFeet < fix.lowerFeet) return "상단고도는 하단고도 이상이어야 합니다.";
+        const lower = fixAltitudeMeters(fix, fix.lowerFeet, fix.lowerRef);
+        const upper = fixAltitudeMeters(fix, fix.upperFeet, fix.upperRef);
+        if (lower != null && upper != null && upper < lower) return "MSL로 환산한 상단고도가 하단고도보다 낮습니다.";
+      }
+      return "";
+    }
+    function openFixPopup(fix) {
+      selectedFix = fix;
+      fixInput("fixName").value = fix.name;
+      fixInput("fixRadius").value = fix.radiusNM;
+      fixInput("fixUpper").value = fix.upperFeet ?? "";
+      fixInput("fixLower").value = fix.lowerFeet ?? "";
+      fixInput("fixUpperRef").textContent = fix.upperRef;
+      fixInput("fixLowerRef").textContent = fix.lowerRef;
+      fixInput("fixCoordinates").textContent = `${formatLat(fix.latitude)} / ${formatLon(fix.longitude)}`;
+      fixInput("fixError").textContent = "임시 저장: 새로고침하면 삭제됩니다. AGL 3D는 DEM이 로드된 영역에서 표시됩니다.";
+      fixPopup.hidden = false;
+    }
+    function closeFixPopup() {
+      if (selectedFix && !selectedFix.saved) removeCustomFix(selectedFix.id);
+      selectedFix = null;
+      fixPopup.hidden = true;
+    }
+    function removeCustomFix(id) {
+      const index = customFixes.findIndex(f => f.id === id);
+      if (index >= 0) customFixes.splice(index, 1);
+      fixMarkers.get(id)?.remove(); fixMarkers.delete(id);
+      updateCustomFixSource();
+    }
+    function createCustomFix(lngLat) {
+      closeFixPopup();
+      const fix = {id: nextFixId++, name:"", latitude:lngLat.lat, longitude:lngLat.lng, radiusNM:0, lowerFeet:null, upperFeet:null, lowerRef:"MSL", upperRef:"MSL", saved:false};
+      customFixes.push(fix);
+      const el = document.createElement("div"); el.className = "custom-fix-pin"; el.innerHTML = pinSvg;
+      const name = document.createElement("span"); name.className = "custom-fix-name"; el.appendChild(name);
+      const marker = new maplibregl.Marker({element:el,anchor:"bottom"}).setLngLat([fix.longitude,fix.latitude]).addTo(map);
+      fixMarkers.set(fix.id,marker);
+      let press = null;
+      for (const type of ["touchstart", "touchmove", "touchend"]) el.addEventListener(type, event => event.stopPropagation(), {passive:true});
+      el.addEventListener("pointerdown", event => {
+        event.stopPropagation();
+        if (event.button !== 0) return;
+        const state = {id:event.pointerId,x:event.clientX,y:event.clientY,dragging:false,timer:null,panWasEnabled:map.dragPan.isEnabled()};
+        press = state;
+        state.timer = setTimeout(() => {
+          if (press !== state || !fix.saved) return;
+          state.dragging = true; map.dragPan.disable(); el.setPointerCapture(state.id);
+          el.style.color = "#fff";
+        },500);
+      });
+      el.addEventListener("pointermove", event => {
+        if (!press || event.pointerId !== press.id) return;
+        if (!press.dragging) {
+          if (Math.hypot(event.clientX-press.x,event.clientY-press.y)>8) {clearTimeout(press.timer);press.moved=true;}
+          return;
+        }
+        event.preventDefault();event.stopPropagation();
+        const rect=map.getCanvas().getBoundingClientRect();
+        const ll=map.unproject([event.clientX-rect.left,event.clientY-rect.top]);
+        fix.longitude=ll.lng;fix.latitude=ll.lat;marker.setLngLat(ll);updateCustomFixSource();
+        if (selectedFix === fix) fixInput("fixCoordinates").textContent=`${formatLat(fix.latitude)} / ${formatLon(fix.longitude)}`;
+      });
+      function finish(event) {
+        if (!press) return;
+        clearTimeout(press.timer);
+        const wasDragged=press.dragging;
+        if (wasDragged && press.panWasEnabled) map.dragPan.enable();
+        if (el.hasPointerCapture(press.id)) el.releasePointerCapture(press.id);
+        el.style.color="";
+        if (wasDragged || press.moved) suppressTapUntil=performance.now()+700;
+        press=null;
+      }
+      el.addEventListener("pointerup",finish);el.addEventListener("pointercancel",finish);
+      el.addEventListener("click",event=>{event.preventDefault();event.stopPropagation();if(!longPressSuppressed())openFixPopup(fix);});
+      el.addEventListener("contextmenu",event=>event.preventDefault());
+      openFixPopup(fix);
+    }
+    for (const id of ["fixUpperRef","fixLowerRef"]) fixInput(id).addEventListener("click",()=>{fixInput(id).textContent=fixInput(id).textContent === "MSL" ? "AGL" : "MSL";});
+    fixInput("fixClose").addEventListener("click",closeFixPopup);
+    fixInput("fixDelete").addEventListener("click",()=>{if(selectedFix)removeCustomFix(selectedFix.id);selectedFix=null;fixPopup.hidden=true;});
+    fixInput("fixSave").addEventListener("click",()=>{
+      if(!selectedFix)return;
+      const numberOrNull=id=>fixInput(id).value.trim()===""?null:Number(fixInput(id).value);
+      const candidate={...selectedFix,name:fixInput("fixName").value.trim(),radiusNM:Number(fixInput("fixRadius").value),upperFeet:numberOrNull("fixUpper"),lowerFeet:numberOrNull("fixLower"),upperRef:fixInput("fixUpperRef").textContent,lowerRef:fixInput("fixLowerRef").textContent};
+      const error=validateFix(candidate);if(error){fixInput("fixError").textContent=error;return;}
+      if ((candidate.upperRef === "AGL" || candidate.lowerRef === "AGL") && terrainElevationMeters(candidate.latitude,candidate.longitude) == null) {
+        showRuntimeStatus("커스텀 FIX: DEM 고도 미확인 — AGL 3D 영역은 지형 데이터 확보 후 표시됩니다.");
+      }
+      Object.assign(selectedFix,candidate,{saved:true});
+      fixMarkers.get(selectedFix.id).getElement().querySelector(".custom-fix-name").textContent=selectedFix.name;
+      updateCustomFixSource();selectedFix=null;fixPopup.hidden=true;
+    });
+    function updateCustomFixSource() {
+      map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
+      map.triggerRepaint();
+    }
+    function ensureCustomFixLayers() {
+      map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
+      map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
+      map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":7*96/72}});
+      map.addLayer({id:"custom-fix-volume",type:"custom",renderingMode:"3d",
+        onAdd(instance,gl){
+          this.program=linkRoute3DProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;out vec4 fragColor;void main(){fragColor=vec4(1.0,0.57,0.0,0.3);}`);
+          this.buffer=gl.createBuffer();
+        },
+        render(gl,options){
+          if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG)return;
+          const matrix=extractProjectionMatrix(options);if(!matrix)return;
+          const vertices=[];
+          const vertex=p=>vertices.push(p.x,p.y,p.z);
+          for(const fix of customFixes){
+            if(!fix.saved||fix.radiusNM<=0||fix.lowerFeet==null||fix.upperFeet==null)continue;
+            const ring=fixCircle(fix),lower=[],upper=[];
+            let valid=true;
+            for(const [lon,lat] of ring){
+              const lo=fixAltitudeMeters(fix,fix.lowerFeet,fix.lowerRef,lat,lon),hi=fixAltitudeMeters(fix,fix.upperFeet,fix.upperRef,lat,lon);
+              if(lo==null||hi==null||hi<lo){valid=false;break;}
+              lower.push(mercatorData(lon,lat,lo));upper.push(mercatorData(lon,lat,hi));
+            }
+            if(!valid)continue;
+            for(let i=0;i<ring.length-1;i++){
+              vertex(lower[i]);vertex(lower[i+1]);vertex(upper[i]);vertex(upper[i]);vertex(lower[i+1]);vertex(upper[i+1]);
+              if(i>0&&i<ring.length-2){vertex(upper[0]);vertex(upper[i]);vertex(upper[i+1]);vertex(lower[0]);vertex(lower[i+1]);vertex(lower[i]);}
+            }
+          }
+          if(!vertices.length)return;
+          gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.DYNAMIC_DRAW);
+          const location=gl.getAttribLocation(this.program,"a_pos");gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);
+          gl.uniformMatrix4fv(gl.getUniformLocation(this.program,"u_matrix"),false,matrix);
+          gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+          gl.drawArrays(gl.TRIANGLES,0,vertices.length/3);gl.depthMask(true);
+        },
+        onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
+      });
+    }
     window.movingMap = {
       map,
 
