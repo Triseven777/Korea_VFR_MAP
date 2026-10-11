@@ -13,3 +13,5 @@ Changes
   line 2: planned MSL altitude (e.g. 3,000 ft)
 - Magnetic bearing removed from the map leg badge.
 - 3D curtain and all v51/v50 route behavior otherwise unchanged.
+
+- v53: reduced pentagon badge size and centered text within the badge.

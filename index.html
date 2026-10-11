@@ -133,8 +133,8 @@
 
     /* Map leg label: pentagon arrow badge sitting directly on route line. */
     .leg-label {
-      width: 92px;
-      height: 46px;
+      width: 68px;
+      height: 34px;
       color: #fff;
       user-select: none;
       pointer-events: none;
@@ -142,42 +142,39 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      filter: drop-shadow(0 1px 2px rgba(0,0,0,.65));
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,.55));
     }
 
     .leg-arrow-badge {
       position: relative;
-      width: 86px;
-      height: 42px;
+      width: 62px;
+      height: 30px;
       box-sizing: border-box;
-      display: grid;
-      grid-template-rows: 1fr 1fr;
-      align-items: center;
-      justify-items: center;
-      padding: 5px 15px 5px 8px;
       background: rgba(18,18,18,.88);
       border: 1px solid rgba(255,255,255,.88);
       clip-path: polygon(
         0 0,
-        calc(100% - 12px) 0,
+        calc(100% - 10px) 0,
         100% 50%,
-        calc(100% - 12px) 100%,
+        calc(100% - 10px) 100%,
         0 100%
       );
-    }
-
-    .leg-arrow-badge {
       transform-origin: 50% 50%;
     }
 
     .leg-label-content {
-      width: 100%;
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: calc(100% - 10px);
       height: 100%;
-      display: grid;
-      grid-template-rows: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       align-items: center;
-      justify-items: center;
+      justify-content: center;
+      gap: 1px;
       transform-origin: 50% 50%;
+      text-align: center;
     }
 
     /* Inner border/highlight so the arrow edge stays readable on imagery. */
@@ -188,9 +185,9 @@
       pointer-events: none;
       clip-path: polygon(
         0 0,
-        calc(100% - 11px) 0,
+        calc(100% - 9px) 0,
         100% 50%,
-        calc(100% - 11px) 100%,
+        calc(100% - 9px) 100%,
         0 100%
       );
       border: 1px solid rgba(255,255,255,.18);
@@ -200,7 +197,7 @@
     .leg-label-altitude {
       position: relative;
       z-index: 1;
-      font-size: 9.5px;
+      font-size: 8px;
       line-height: 1;
       font-weight: 400;
       white-space: nowrap;
