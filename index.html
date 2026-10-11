@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.07</title>
+  <title>KoreaVFR_v2.08</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -990,7 +990,7 @@
     #fixCenterCross::before,#fixCenterCross::after {content:"";position:absolute;left:9px;top:0;width:2px;height:20px;background:#ff3030;transform:rotate(45deg);}
     #fixCenterCross::after {transform:rotate(-45deg);}
     #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
-    .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:#142032cc;padding:4px 7px;border-radius:5px;text-align:center;font:700 12px/1.3 Arial;white-space:nowrap;}
+    .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:none;padding:0;border-radius:0;text-shadow:0 1px 2px #000;transform:translate(-50%,-50%);text-align:center;font:700 12px/1.3 Arial;white-space:nowrap;}
     .custom-fix-altitude .fix-alt-divider {border-top:1px solid #ff9d32;margin:3px 0;}
   </style>
 </head>
@@ -998,7 +998,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.07 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.08 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -5010,14 +5010,21 @@
     fixInput("fixVia").addEventListener("click",()=>setFixRouteRole("via"));
     fixInput("fixDestination").addEventListener("click",()=>setFixRouteRole("destination"));
     function updateCustomFixSource() {
-      map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
+      map.getSource("custom-fix-areas")?.setData({type:"FeatureCollection",features:customFixes.filter(f=>f.saved&&f.radiusNM>0).map(f=>({type:"Feature",properties:{id:f.id,floating:fixFloatsAboveGround(f)},geometry:{type:"Polygon",coordinates:[fixCircle(f)]}}))});
       resolveFixLabelCollisions();
       updateFixAltitudeLabels();
       map.triggerRepaint();
     }
+    const FIX_TOP_VIEW_PITCH_DEG = 5;
+    function isFixTopView() { return map.getPitch() <= FIX_TOP_VIEW_PITCH_DEG; }
     function formatFixAltitude(value,reference) {
-      if(value==null || (value===0&&reference==="AGL"))return "GND";
-      return `${Math.round(value).toLocaleString("en-US")} ft ${reference}`;
+      return String(Math.round(value ?? 0));
+    }
+    function fixFloatsAboveGround(fix) {
+      if(fix.lowerFeet==null)return false;
+      if(fix.lowerRef === "AGL")return fix.lowerFeet>0;
+      const ground=terrainElevationMeters(fix.latitude,fix.longitude);
+      return ground!=null && feetToMeters(fix.lowerFeet)>ground;
     }
     function segmentHitsRect(a,b,r) {
       let t0=0,t1=1;const dx=b.x-a.x,dy=b.y-a.y;
@@ -5034,10 +5041,19 @@
         label.hidden=!f.saved || map.getZoom()<=10 || (f.upperFeet==null&&f.lowerFeet==null);
         if(label.hidden)continue;
         label.innerHTML=`<div>${formatFixAltitude(f.upperFeet,f.upperRef)}</div><div class="fix-alt-divider"></div><div>${formatFixAltitude(f.lowerFeet,f.lowerRef)}</div>`;
+        const marker=fixMarkers.get(f.id),pin=marker.getElement().querySelector("svg").getBoundingClientRect();
+        const center={x:(pin.left+pin.right)/2,y:(pin.top+pin.bottom)/2};
+        const projectedRing=f.radiusNM>0?fixCircle(f).map(([lon,lat])=>map.project([lon,lat])):[];
+        const canvas=map.getCanvas().getBoundingClientRect();
+        const points=projectedRing.map(p=>({x:p.x+canvas.left,y:p.y+canvas.top}));
+        const boundaryX=points.length?Math.max(...points.map(p=>p.x)):center.x+100;
+        const markerRect=marker.getElement().getBoundingClientRect();
+        label.style.left=`${(pin.right+boundaryX)/2-markerRect.left}px`;
+        label.style.top=`${center.y-markerRect.top}px`;
         const rect=label.getBoundingClientRect();
         const pinHit=pins.some(p=>rect.left<p.right+3&&rect.right>p.left-3&&rect.top<p.bottom+3&&rect.bottom>p.top-3);
         const edgeHit=customFixes.filter(x=>x.saved&&x.radiusNM>0).some(x=>{
-          const ring=fixCircle(x).map(([lon,lat])=>map.project([lon,lat]));
+          const ring=fixCircle(x).map(([lon,lat])=>{const p=map.project([lon,lat]);return {x:p.x+canvas.left,y:p.y+canvas.top};});
           return ring.slice(1).some((point,i)=>segmentHitsRect(ring[i],point,rect));
         });
         if(pinHit||edgeHit)label.hidden=true;
@@ -5093,7 +5109,7 @@
 
     function ensureCurtainOutsideFixLayer() {
       map.addLayer({id:"route-curtain-outside-fixes",type:"custom",renderingMode:"3d",render(gl,options){
-        if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG || route3DLayerState.disabled || !route3DLayerState.heightMapReady)return;
+        if(isFixTopView() || route3DLayerState.disabled || !route3DLayerState.heightMapReady)return;
         const fixes=customFixes.filter(f=>f.saved&&f.radiusNM>0).slice(0,64);
         if(!fixes.length)return;
         const matrix=extractProjectionMatrix(options),program=route3DLayerState.curtainProgram;
@@ -5118,15 +5134,19 @@
     function ensureCustomFixLayers() {
       map.addSource("custom-fix-areas",{type:"geojson",data:{type:"FeatureCollection",features:[]}});
       map.addLayer({id:"custom-fix-fill",type:"fill",source:"custom-fix-areas",paint:{"fill-color":"#ff9200","fill-opacity":0.3}});
+      map.addLayer({id:"custom-fix-shadow",type:"fill",source:"custom-fix-areas",filter:["==",["get","floating"],true],paint:{"fill-color":"#000000","fill-opacity":0}});
       map.addLayer({id:"custom-fix-outline",type:"line",source:"custom-fix-areas",paint:{"line-color":"#ff9200","line-width":5*96/72}});
+      let lastFixTopView=null;
       const updateFixGroundStyle = () => {
-        const pitched = map.getPitch() > TOP_VIEW_PITCH_THRESHOLD_DEG;
-        map.setPaintProperty("custom-fix-outline","line-width",(pitched ? 1 : 5)*96/72);
-        // In 3D, the ground footprint is only a reference outline.
-        // The actual volume is bounded by the entered lower and upper altitude.
-        map.setPaintProperty("custom-fix-fill","fill-opacity",pitched ? 0 : 0.3);
+        const top=isFixTopView();
+        if(top===lastFixTopView)return;
+        lastFixTopView=top;
+        map.setPaintProperty("custom-fix-outline","line-width",5*96/72);
+        map.setPaintProperty("custom-fix-outline","line-opacity",top?1:0);
+        map.setPaintProperty("custom-fix-fill","fill-opacity",top?0.3:0);
+        map.setPaintProperty("custom-fix-shadow","fill-opacity",top?0:0.3);
       };
-      map.on("pitch", updateFixGroundStyle);
+      for(const event of ["pitch","pitchend","moveend","idle"])map.on(event,updateFixGroundStyle);
       updateFixGroundStyle();
       map.addLayer({id:"custom-fix-volume",type:"custom",renderingMode:"3d",
         onAdd(instance,gl){
@@ -5134,9 +5154,10 @@
           this.buffer=gl.createBuffer();
         },
         render(gl,options){
-          if(map.getPitch()<=TOP_VIEW_PITCH_THRESHOLD_DEG)return;
+          updateFixGroundStyle();
+          if(isFixTopView())return;
           const matrix=extractProjectionMatrix(options);if(!matrix)return;
-          const vertices=[], outlines=[];
+          const vertices=[], outlines=[],bottomOutlines=[];
           const halfWidth=(5*96/72)/(512*Math.pow(2,map.getZoom()))/2;
           const vertex=p=>vertices.push(p.x,p.y,p.z);
           for(const fix of customFixes){
@@ -5155,6 +5176,9 @@
               const nx=-dy/len*halfWidth,ny=dx/len*halfWidth;
               const p=[a.x+nx,a.y+ny,a.z],q=[a.x-nx,a.y-ny,a.z],r=[b.x+nx,b.y+ny,b.z],t=[b.x-nx,b.y-ny,b.z];
               outlines.push(...p,...q,...r,...r,...q,...t);
+              const la=lower[i],lb=lower[i+1],bx=nx/5,by=ny/5;
+              const lp=[la.x+bx,la.y+by,la.z],lq=[la.x-bx,la.y-by,la.z],lr=[lb.x+bx,lb.y+by,lb.z],lt=[lb.x-bx,lb.y-by,lb.z];
+              bottomOutlines.push(...lp,...lq,...lr,...lr,...lq,...lt);
               vertex(lower[i]);vertex(lower[i+1]);vertex(upper[i]);vertex(upper[i]);vertex(lower[i+1]);vertex(upper[i+1]);
               if(i>0&&i<ring.length-2){vertex(upper[0]);vertex(upper[i]);vertex(upper[i+1]);vertex(lower[0]);vertex(lower[i+1]);vertex(lower[i]);}
             }
@@ -5170,6 +5194,8 @@
           gl.uniform4f(gl.getUniformLocation(this.program,"u_color"),1,.57,0,1);
           gl.enable(gl.POLYGON_OFFSET_FILL);gl.polygonOffset(-1,-1);
           gl.drawArrays(gl.TRIANGLES,0,outlines.length/3);
+          gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(bottomOutlines),gl.DYNAMIC_DRAW);
+          gl.drawArrays(gl.TRIANGLES,0,bottomOutlines.length/3);
           gl.disable(gl.POLYGON_OFFSET_FILL);
           const intersections=buildFixCurtainIntersectionLines();
           if(intersections.length){
