@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>Korea VFR Moving Map - v6 Route Drag</title>
+  <title>KoreaVFR_v2.00</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -991,6 +991,7 @@
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.00 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1049,7 +1050,7 @@
   <div id="dragHint" class="drag-hint">루트를 원하는 위치까지 드래그한 뒤 놓으세요</div>
 
   <div class="nav-controls" aria-label="지도 방향 및 현위치">
-    <button id="locateAircraftBtn" class="nav-control-btn" type="button" title="현위치">
+    <button id="locateAircraftBtn" class="nav-control-btn" type="button" title="시뮬레이션 위치로 이동" aria-label="시뮬레이션 위치로 이동">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="5"></circle>
         <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
@@ -1530,18 +1531,20 @@
     }
 
     function aircraftDeclination() {
-      return declination(aircraft.latitude, aircraft.longitude) ?? 0;
+      return declination(aircraft.latitude, aircraft.longitude);
     }
 
     function aircraftTrueHeading() {
       // true = magnetic + easterly variation (west is negative)
-      return norm(aircraft.magneticHeading + aircraftDeclination());
+      const variation = aircraftDeclination();
+      return variation == null ? null : norm(aircraft.magneticHeading + variation);
     }
 
     function aircraftScreenRotation() {
       // Aircraft must always visually point toward its actual travel direction,
       // regardless of map rotation.
-      return norm(aircraftTrueHeading() - map.getBearing());
+      const heading = aircraftTrueHeading();
+      return heading == null ? null : norm(heading - map.getBearing());
     }
 
     function feetToMeters(feet) {
@@ -1632,6 +1635,11 @@
       const aglValue = el.querySelector(".aircraft-agl-value");
       if (!symbolTilt || !symbol || !stem || !card || !ground || !mslValue || !aglValue) return;
 
+      const rotation = aircraftScreenRotation();
+      symbol.style.visibility = rotation == null ? "hidden" : "visible";
+      document.getElementById("magneticStatus").textContent = rotation == null
+        ? "MAG UNKNOWN — 방향·이동 시뮬레이션 중지"
+        : "가상 비행 중 · 실제 GPS 아님";
       mslValue.textContent = formatFeetValue(aircraft.altitudeMslFeet);
       aglValue.textContent = formatFeetValue(aircraftAglFeet());
 
@@ -1657,7 +1665,7 @@
         symbolTilt.style.bottom = "0px";
         symbolTilt.style.transform =
           `translateX(-50%) perspective(420px) rotateX(${map.getPitch()}deg)`;
-        symbol.style.transform = `rotate(${aircraftScreenRotation()}deg)`;
+        symbol.style.transform = `rotate(${rotation ?? 0}deg)`;
         stem.style.opacity = "0";
         stem.style.height = "0px";
         ground.style.opacity = "0";
@@ -1686,7 +1694,7 @@
       const pitch = map.getPitch();
       symbolTilt.style.transform =
         `translateX(-50%) perspective(420px) rotateX(${pitch}deg)`;
-      symbol.style.transform = `rotate(${aircraftScreenRotation()}deg)`;
+      symbol.style.transform = `rotate(${rotation ?? 0}deg)`;
 
       stem.style.height = `${Math.max(0, distancePx - 10)}px`;
       stem.style.transform = `translateX(-50%) rotate(${angleDeg}deg)`;
@@ -1819,6 +1827,7 @@
       if (inputElement) inputElement.classList.remove("invalid");
 
       syncVisibleRouteAltitudeInputs(pointIndex + 1);
+      syncRouteAltitudeLabels();
       invalidateRoute3DGeometry();
       refreshRoute3D();
 
@@ -2225,7 +2234,7 @@
       map.setPaintProperty(
         "route-line",
         "line-opacity",
-        topView ? 0 : 1
+        route3DLayerState.disabled ? 1 : (topView ? 0 : 1)
       );
     }
 
@@ -2257,7 +2266,7 @@
         map.setPaintProperty(
           "route-line",
           "line-opacity",
-          map.getPitch() <= TOP_VIEW_PITCH_THRESHOLD_DEG ? 0 : 1
+          1
         );
       }
     }
@@ -3020,6 +3029,11 @@
     }
 
     function applyHeadingUp({ animate = true } = {}) {
+      if (aircraftTrueHeading() == null) {
+        applyNorthUpCentered({ animate });
+        updateAircraftMarkerVisuals();
+        return;
+      }
       followMode = "heading";
       followSuspendedByUser = false;
       orientationBtn.classList.add("heading-active");
@@ -3034,7 +3048,7 @@
     }
 
     function refreshFollowCamera({ animate = false } = {}) {
-      if (followMode !== "heading") return;
+      if (followMode !== "heading" || aircraftTrueHeading() == null) return;
       if (followSuspendedByUser) return;
       if (userCameraGestureActive()) return;
 
@@ -3149,6 +3163,10 @@
         // declination at the aircraft's current position.
         aircraft.magneticHeading = magneticHeading;
         const trueHeading = aircraftTrueHeading();
+        if (trueHeading == null) {
+          simulation.rafId = requestAnimationFrame(simulationStep);
+          return;
+        }
 
         const distanceMeters =
           simulation.speedKnots * KNOT_TO_MPS * stepDt;
@@ -3304,7 +3322,12 @@
 
     function declination(lat, lon) {
       if (!magvarFn) return null;
-      return magvarFn(lat, lon, 0, new Date());
+      try {
+        const value = magvarFn(lat, lon, 0, new Date());
+        return Number.isFinite(value) ? value : null;
+      } catch (error) {
+        return null;
+      }
     }
 
     function terrainElevationMeters(latitude, longitude) {
@@ -3586,6 +3609,27 @@
       resetRoute(true);
     });
 
+
+    function syncRouteAltitudeLabels() {
+      // Update existing nodes without recreating the focused altitude input.
+      pointMarkers.forEach((marker, index) => {
+        const point = route[index];
+        if (!point) return;
+        const coords = marker.getElement().querySelector(".route-point-coords");
+        if (!coords) return;
+        const name = (point.name || "").trim();
+        const altitude = routePointAltitudeFeet(point);
+        const label = altitude != null && altitude > 0
+          ? `<span class="route-point-altitude-map">${Math.round(altitude).toLocaleString("en-US")} ft</span>` : "";
+        coords.innerHTML = (name ? `<span class="route-point-name">${escapeHtml(name)}</span>`
+          : `${formatLat(point.latitude)}<br>${formatLon(point.longitude)}`) + label;
+      });
+      legMarkers.forEach((marker, index) => {
+        if (!route[index] || !route[index + 1]) return;
+        const label = marker.getElement().querySelector(".leg-label-altitude");
+        if (label) label.textContent = `${Math.round(legPlannedAltitudeFeet(route[index], route[index + 1])).toLocaleString("en-US")} ft`;
+      });
+    }
 
     function clearPointMarkers() {
       pointMarkers.forEach(m => m.remove());
@@ -4187,10 +4231,6 @@
 
     map.on("move", () => {
       updateAllLegBadgeRotations();
-    });
-
-    map.on("zoom", () => {
-      updateAircraftMarkerVisuals();
     });
 
     map.on("terrain", () => {
