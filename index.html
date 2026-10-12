@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.11</title>
+  <title>KoreaVFR_v2.12</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -992,13 +992,28 @@
     #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
     .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:none;padding:0;border-radius:0;text-shadow:0 1px 2px #000,0 0 3px #000;-webkit-text-stroke:.25px currentColor;transform:translate(-50%,-50%);text-align:center;font:900 14px/1.3 Arial;white-space:nowrap;}
     .custom-fix-altitude .fix-alt-divider {border-top:1px solid #ff9d32;margin:3px 0;}
+    #pressureButton {position:absolute;right:0;bottom:110px;flex-direction:column;gap:2px;font:700 12px/1 Arial;}
+    #pressureButton .pressure-divider {width:28px;border-top:1px solid #fff9;}
+    #pressureButton.pressure-active {background:rgba(34,84,165,.96);}
+    #pressurePanel {position:fixed;inset:0;z-index:1100;pointer-events:none;--dial-size:min(390px,70vh);}
+    #pressurePanel[hidden]{display:none;}
+    #pressureDial {position:absolute;right:calc(52px - var(--dial-size)/2);top:50%;transform:translateY(-50%);width:var(--dial-size);height:var(--dial-size);border-radius:50%;background:radial-gradient(circle at 45% 40%,#303238,#17191d);border:1px solid #ffffff44;box-shadow:0 2px 12px #0008;pointer-events:auto;touch-action:none;user-select:none;}
+    #pressureDial svg {width:100%;height:100%;pointer-events:none;}
+    #pressureTicks {transform-origin:200px 200px;}
+    #pressureClose {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:#3b3d43;color:#ffdb48;border:1px solid #ffffff18;font:32px Arial;cursor:pointer;touch-action:none;}
+    #pressureFields {position:absolute;right:calc(76px + var(--dial-size)/2);top:50%;transform:translateY(-50%);width:145px;pointer-events:auto;}
+    .pressure-value-wrap {position:relative;margin:10px 0;}
+    #pressureFields input {width:100%;box-sizing:border-box;background:#142032ee;color:white;border:1px solid #ffffffb0;border-radius:8px;padding:13px 48px 13px 9px;font:700 23px/1 Arial;user-select:text;}
+    .pressure-unit {position:absolute;right:9px;top:50%;transform:translateY(-50%);font:12px Arial;color:#cfd7e5;pointer-events:none;}
+    #pressureError {font:12px/1.4 Arial;color:#ffd09a;background:#142032dd;border-radius:4px;}
+    @media(max-width:480px){#pressurePanel{--dial-size:min(300px,65vh);}#pressureFields{width:125px;}#pressureFields input{font-size:19px;}}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.11 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.12 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1069,6 +1084,7 @@
       </svg>
     </button>
 
+    <button id="pressureButton" class="nav-control-btn" type="button" aria-expanded="false" title="기압계 단위변환"><span id="pressureButtonHpa">1013</span><span class="pressure-divider"></span><span id="pressureButtonInHg">29.92</span></button>
     <button id="fixModeBtn" class="nav-control-btn" type="button" title="커스텀 픽스 설정" aria-label="커스텀 픽스 설정" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22S4 13 4 9a8 8 0 1 1 16 0c0 4-8 13-8 13Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
     </button>
@@ -1099,7 +1115,13 @@
       <div style="display:flex;gap:6px;margin-top:14px"><button id="fixDeparture" class="popup-btn">출발지 설정</button><button id="fixVia" class="popup-btn">경유지 설정</button><button id="fixDestination" class="popup-btn">도착지 설정</button></div>
       <div class="popup-actions"><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
     </section>
+    <section id="pressurePanel" hidden aria-label="기압계 단위변환">
+      <div id="pressureFields"><div class="pressure-value-wrap"><input id="pressureHpa" type="text" inputmode="numeric" autocomplete="off" aria-label="기압 hPa" maxlength="4" /><span class="pressure-unit">hPa</span></div><div class="pressure-value-wrap"><input id="pressureInHg" type="text" inputmode="decimal" autocomplete="off" aria-label="기압 inHg" maxlength="6" /><span class="pressure-unit">inHg</span></div><div id="pressureError" role="status"></div></div>
+      <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
+    </section>
     <script type="module">
+  import { mountPressureTool } from "./js/pressure-tool.mjs";
+  mountPressureTool();
   import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
 
   (async () => {
