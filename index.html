@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.13</title>
+  <title>KoreaVFR_v2.14</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -1007,13 +1007,28 @@
     .pressure-unit {position:absolute;right:9px;top:50%;transform:translateY(-50%);font:12px Arial;color:#cfd7e5;pointer-events:none;}
     #pressureError {font:12px/1.4 Arial;color:#ffd09a;background:#142032dd;border-radius:4px;}
     @media(max-width:480px){#pressurePanel{--dial-size:min(250px,55vh);}#pressureFields{width:125px;}#pressureFields input{font-size:19px;}}
+    #posButton {position:absolute;right:0;bottom:165px;flex-direction:column;gap:2px;font:700 10px Arial;}
+    #posButton svg {width:23px;height:23px;}
+    #posButton.pos-active {background:rgba(34,84,165,.96);}
+    #posPanel {position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:1050;width:min(740px,calc(100vw - 32px));box-sizing:border-box;padding:14px 18px;background:#10151df5;color:white;border:1px solid #ffffff44;border-radius:14px;font:14px Arial;box-shadow:0 4px 16px #0008;}
+    #posPanel[hidden],#posList[hidden]{display:none;}
+    .pos-head {display:flex;justify-content:space-between;align-items:center;font-size:17px;font-weight:700;}
+    #posClose {background:#343d4d;border:0;border-radius:50%;color:white;width:32px;height:32px;font-size:24px;}
+    #posReport {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;margin:12px 0;font-size:21px;font-weight:700;}
+    #posDistance {font-size:26px;}#posDirection {background:#1b385c;color:#79b9ff;padding:5px 9px;border-radius:5px;}
+    #posReference {max-width:260px;overflow-wrap:anywhere;}
+    #posSelect {display:flex;justify-content:space-between;gap:10px;align-items:center;width:100%;padding:11px;background:#ffffff09;color:white;border:1px solid #ffffff77;border-radius:9px;font:15px Arial;text-align:left;}
+    #posSelectedDistance {white-space:nowrap;}
+    #posList {position:absolute;right:18px;top:calc(100% + 5px);width:min(440px,calc(100vw - 60px));max-height:min(420px,55vh);overflow:auto;overscroll-behavior:contain;background:#111924f5;border:1px solid #ffffff44;border-radius:10px;padding:6px;box-sizing:border-box;}
+    .pos-reference-row,.pos-more {display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:42px;padding:10px;width:100%;border:0;border-bottom:1px solid #ffffff18;background:transparent;color:white;font:14px Arial;text-align:left;}
+    .pos-reference-row[aria-selected="true"] {background:#25466f;border-radius:6px;}.pos-reference-row span:last-child{white-space:nowrap;}.pos-more{justify-content:center;color:#a7b5c9;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.13 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.14 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1084,6 +1099,7 @@
       </svg>
     </button>
 
+    <button id="posButton" class="nav-control-btn" type="button" title="Position Report" aria-label="위치 보고 POS" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg><span>POS</span></button>
     <button id="pressureButton" class="nav-control-btn" type="button" aria-expanded="false" title="기압계 단위변환"><span id="pressureButtonHpa">1013</span><span class="pressure-divider"></span><span id="pressureButtonInHg">29.92</span></button>
     <button id="fixModeBtn" class="nav-control-btn" type="button" title="커스텀 픽스 설정" aria-label="커스텀 픽스 설정" aria-pressed="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22S4 13 4 9a8 8 0 1 1 16 0c0 4-8 13-8 13Z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="9" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
@@ -1115,11 +1131,18 @@
       <div style="display:flex;gap:6px;margin-top:14px"><button id="fixDeparture" class="popup-btn">출발지 설정</button><button id="fixVia" class="popup-btn">경유지 설정</button><button id="fixDestination" class="popup-btn">도착지 설정</button></div>
       <div class="popup-actions"><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
     </section>
+    <section id="posPanel" hidden aria-label="Position Report">
+      <div class="pos-head"><span>Position Report <small style="font-size:11px;color:#ffbc76">SIM · 가상 위치</small></span><button id="posClose" type="button" aria-label="위치 보고 닫기">×</button></div>
+      <div id="posReport"><span id="posDistance"></span><span id="posDirection"></span><span>/</span><span id="posRadial"></span><small>OF</small><span id="posReference"></span></div>
+      <button id="posSelect" type="button" aria-expanded="false" aria-controls="posList"><span id="posSelected"></span><span id="posSelectedDistance"></span></button>
+      <div id="posList" hidden role="listbox" aria-label="위치 보고 기준점"></div>
+    </section>
     <section id="pressurePanel" hidden aria-label="기압계 단위변환">
       <div id="pressureFields"><div class="pressure-value-wrap"><input id="pressureHpa" type="text" inputmode="numeric" autocomplete="off" aria-label="기압 hPa" maxlength="4" /><span class="pressure-unit">hPa</span></div><div class="pressure-value-wrap"><input id="pressureInHg" type="text" inputmode="decimal" autocomplete="off" aria-label="기압 inHg" maxlength="6" /><span class="pressure-unit">inHg</span></div><div id="pressureError" role="status"></div></div>
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { mountPositionReport } from "./js/position-report-ui.mjs";
   import { mountPressureTool } from "./js/pressure-tool.mjs";
   mountPressureTool();
   import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
@@ -3148,6 +3171,7 @@
       aircraft.longitude = Number(longitude);
       aircraft.magneticHeading = Number(magneticHeading);
       aircraft.altitudeMslFeet = Number(altitudeMslFeet);
+      positionReport?.refresh();
 
       if (aircraftMarker) {
         aircraftMarker.setLngLat([aircraft.longitude, aircraft.latitude]);
@@ -5293,6 +5317,15 @@
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
     }
+    const positionReport = mountPositionReport({
+      getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
+      getReferences: () => [
+        ...AIRPORT_POINTS_GEOJSON.features.map((f,i)=>({id:`airport:${f.properties.icao}:${i}`,kind:"airport",name:f.properties.nameEn||f.properties.nameKo,icao:f.properties.icao,longitude:f.geometry.coordinates[0],latitude:f.geometry.coordinates[1]})),
+        ...customFixes.filter(f=>f.saved).map(f=>({id:`fix:${f.id}`,kind:"fix",name:f.name,longitude:f.longitude,latitude:f.latitude}))
+      ],
+      onMapTap: close => map.on("click",close)
+    });
+
     window.movingMap = {
       map,
 
