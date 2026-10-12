@@ -13,7 +13,7 @@ export function isValidHpa(hpa) { return Number.isFinite(hpa) && hpa >= MIN_HPA 
 export function parsePressureInput(text, unit) {
   const raw = text.trim();
   if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) return null;
-  if (unit === 'hPa') return /^\d+$/.test(raw) ? Number(raw) : null;
+  if (unit === 'hPa') return /^\d+$/.test(raw) ? (Number(raw) === 1013 ? 1013.25 : Number(raw)) : null;
   return !raw.includes('.') && raw.length === 4 ? Number(raw) / 100 : Number(raw);
 }
 export function angleDelta(current, previous) { return ((current - previous + 540) % 360) - 180; }
