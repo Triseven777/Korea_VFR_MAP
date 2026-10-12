@@ -3,13 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.15</title>
+  <title>KoreaVFR_v2.16</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
     rel="stylesheet"
   />
 
+  <link rel="stylesheet" href="./js/ui-tokens.css" />
   <style>
     html, body, #map {
       width: 100%;
@@ -1022,13 +1023,22 @@
     #posList {position:absolute;right:18px;top:calc(100% + 5px);width:min(440px,calc(100vw - 60px));max-height:min(420px,55vh);overflow:auto;overscroll-behavior:contain;background:#111924f5;border:1px solid #ffffff44;border-radius:10px;padding:6px;box-sizing:border-box;}
     .pos-reference-row,.pos-more {display:flex;justify-content:space-between;gap:10px;align-items:center;min-height:42px;padding:10px;width:100%;border:0;border-bottom:1px solid #ffffff18;background:transparent;color:white;font:14px Arial;text-align:left;}
     .pos-reference-row[aria-selected="true"] {background:#25466f;border-radius:6px;}.pos-reference-row span:last-child{white-space:nowrap;}.pos-more{justify-content:center;color:#a7b5c9;}
+    #measureButton {position:absolute;right:0;bottom:220px;}
+    #measureButton.measure-active {background:rgba(45,110,190,.9);color:#69e6ff;}
+    #measureHint {position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100;pointer-events:none;text-align:center;max-width:calc(100vw - 80px);}
+    #measureHint[hidden],#measureOverlay[hidden]{display:none;}
+    #measureOverlay {position:fixed;inset:0;z-index:80;pointer-events:none;}
+    #measureOverlay svg {width:100%;height:100%;overflow:visible;}
+    #measureOverlay .ui-map-value {position:absolute;transform:translate(-50%,-50%);color:#7febff;}
+    .measure-handle {width:44px;height:44px;border:2px solid #78e9ff;border-radius:50%;background:#122637dd;color:white;font:800 17px Arial;touch-action:none;cursor:grab;}
+    .measure-handle.measure-dragging {background:#237d99;border-width:4px;box-shadow:0 0 0 5px #63def94d;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.15 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.16 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1099,6 +1109,7 @@
       </svg>
     </button>
 
+    <button id="measureButton" class="nav-control-btn" type="button" title="거리측정" aria-label="거리측정" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16L16 3l5 5L8 21Z"/><path d="M6 13l2 2M9 10l3 3M12 7l2 2M15 4l3 3"/></svg></button>
     <button id="posButton" class="nav-control-btn" type="button" title="Position Report" aria-label="위치 보고 POS" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><path d="M12 1v5M12 18v5M1 12h5M18 12h5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></svg><span>POS</span></button>
     <button id="pressureButton" class="nav-control-btn" type="button" aria-expanded="false" title="기압계 단위변환"><span id="pressureButtonHpa">1013</span><span class="pressure-divider"></span><span id="pressureButtonInHg">29.92</span></button>
     <button id="fixModeBtn" class="nav-control-btn" type="button" title="커스텀 픽스 설정" aria-label="커스텀 픽스 설정" aria-pressed="false">
@@ -1132,6 +1143,8 @@
       <div style="display:flex;gap:6px;margin-top:14px"><button id="fixDeparture" class="popup-btn">출발지 설정</button><button id="fixVia" class="popup-btn">경유지 설정</button><button id="fixDestination" class="popup-btn">도착지 설정</button></div>
       <div class="popup-actions"><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
     </section>
+    <div id="measureHint" class="ui-floating-panel" hidden></div>
+    <div id="measureOverlay" hidden><svg aria-hidden="true"><defs><marker id="measureArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#5ee5ff" /></marker></defs><line id="measureLine" stroke="#5ee5ff" stroke-width="3" marker-start="url(#measureArrow)" marker-end="url(#measureArrow)" /></svg><span id="measureDistance" class="ui-map-value"></span><span id="measureAB" class="ui-map-value"></span><span id="measureBA" class="ui-map-value"></span></div>
     <section id="posPanel" hidden aria-label="Position Report">
       <div class="pos-head"><span>Position Report <small style="font-size:11px;color:#ffbc76">SIM · 가상 위치</small></span><button id="posClose" type="button" aria-label="위치 보고 닫기">×</button></div>
       <div id="posReport"><span id="posDistance"></span><span id="posDirection"></span><span>/</span><span id="posRadial"></span><small>OF</small><span id="posReference"></span></div>
@@ -1143,6 +1156,7 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { mountMeasureDistance } from "./js/measure-distance-ui.mjs";
   import * as waypointRepository from "./js/data/custom-waypoint-repository.mjs";
   import { createWaypointId } from "./js/models/custom-waypoint.mjs";
   import { mountPositionReport } from "./js/position-report-ui.mjs";
@@ -4867,7 +4881,7 @@
       function handleMapTap(e) {
         if (longPressSuppressed()) return;
         if (dragState.active) return;
-        if (fixModeActive) return;
+        if (fixModeActive || measureTool?.isSelecting()) return;
         if (!routeModeActive) return;
 
         const features = map.queryRenderedFeatures(e.point, {
@@ -5354,6 +5368,7 @@
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
     }
+    const measureTool = mountMeasureDistance({map,maplibregl});
     const positionReport = mountPositionReport({
       getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
       getReferences: () => [

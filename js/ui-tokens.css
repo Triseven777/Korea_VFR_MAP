@@ -1,0 +1,3 @@
+:root {--ui-panel-bg:rgba(12,18,28,.92);--ui-border:1px solid rgba(255,255,255,.28);--ui-radius:22px;--ui-shadow:0 12px 30px rgba(0,0,0,.35);--ui-title-size:30px;--ui-value-size:38px;--ui-secondary-size:20px;--ui-accent:#4DA3FF;--ui-badge-bg:rgba(45,110,190,.75);--ui-padding:24px;--ui-gap:14px;--ui-touch:44px;}
+.ui-floating-panel {background:var(--ui-panel-bg);border:var(--ui-border);border-radius:var(--ui-radius);box-shadow:var(--ui-shadow);color:#fff;padding:var(--ui-padding);font:700 var(--ui-secondary-size)/1.4 Arial;}
+.ui-map-value {background:var(--ui-panel-bg);border:var(--ui-border);border-radius:12px;color:#fff;padding:6px 10px;font:800 18px/1.2 Arial;white-space:nowrap;}

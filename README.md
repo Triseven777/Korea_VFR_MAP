@@ -1,23 +1,15 @@
-# KoreaVFR_v2.15
+# KoreaVFR_v2.16
 
-Custom Fix / Custom Waypoint IndexedDB 기기 저장.
+거리측정 버튼(POS 위), 중앙 안내, A/B 핸들 및 시안색 양방향 화살표 오버레이.
+- A 지정 후 이어 드래그하거나 다음 탭으로 B 생성.
+- 완료 후 A/B는 450ms 길게 누른 뒤 이동. 이동 중 거리/양방향 방위 갱신.
+- 다른 지도 탭으로 결과 유지. 버튼 재탭으로 측정 UI 전부 제거, 다시 켜면 초기화.
+- 첫 A 지정 및 즉시 드래그 중 지도 pan을 일시 중단하고 복구. 완료 후 일반 지도 pan/zoom 유지.
+- route-hit 위 측정 생성은 피하여 기존 Drag Route 우선. 측정점 선택 중 Route 신규점 동시 생성 방지.
+- 계산 모듈은 Position Report의 순수 Haversine/initial bearing 함수를 재사용.
+- 공통 UI 토큰 js/ui-tokens.css 추가. 기존 패널 전체 스타일은 변경하지 않음.
+- 세션 메모리 저장만 사용. 네트워크 요청 없음.
 
-DB koreaVfrDb v1 / customWaypoints / keyPath id (UUID).
-필드: id,name,latitude,longitude,note,createdAt,updatedAt + 기존 radiusNM,고도,AGL/MSL.
-Repository API: getAllCustomWaypoints,getCustomWaypointById,addCustomWaypoint,updateCustomWaypoint,deleteCustomWaypoint.
-
-- 팝업 자동 저장/닫기/Route 설정은 transaction 완료 후 성공 처리.
-- 실패 시 팝업 유지 및 상태 표시. 저장 도중 팝업 입력 잠금.
-- FIX 드래그 종료 시 좌표 저장, 실패 시 원래 위치 복귀.
-- 삭제 transaction 성공 후 지도 제거. 새 미저장 draft는 DB 삭제 없이 제거.
-- 앱 지도 초기화 시 저장소를 읽어 기존 핀/반경/3D/POS 후보로 복원.
-- Note 입력 필드 추가. Aerodrome 정적 데이터는 변경 없음.
-- 사용자 데이터에 외부 API/서버/GitHub 저장 없음.
-
-검증: node --test tests/*.test.mjs — 28개 통과.
-IndexedDB 계약 테스트 더블에서 CRUD, 연결 재개방, 변경/삭제 유지, 네트워크 금지, 실패를 확인.
-실제 브라우저 새로고침/완전 종료·재접속/인터넷 차단 실기기 검증은 미실시.
-앱·지도 리소스의 오프라인 재실행 확보는 기존처럼 별도 작업이 필요.
-브라우저 저장소 삭제/사생활 모드 등은 일반 영구 저장 보장 범위 밖.
-
-ZIP 내용물을 js/assets 포함해 GitHub 루트에 업로드하세요.
+node --test tests/*.test.mjs — 30개 통과(측정 2개, 기존 28개).
+JS 구문 검사 통과. 실기기 long-press/지도 터치 회귀 테스트는 미실시.
+ZIP 내용물을 js/assets 포함하여 GitHub 루트에 업로드하세요.
