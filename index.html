@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.12</title>
+  <title>KoreaVFR_v2.13</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -995,25 +995,25 @@
     #pressureButton {position:absolute;right:0;bottom:110px;flex-direction:column;gap:2px;font:700 12px/1 Arial;}
     #pressureButton .pressure-divider {width:28px;border-top:1px solid #fff9;}
     #pressureButton.pressure-active {background:rgba(34,84,165,.96);}
-    #pressurePanel {position:fixed;inset:0;z-index:1100;pointer-events:none;--dial-size:min(390px,70vh);}
+    #pressurePanel {position:fixed;inset:0;z-index:1100;pointer-events:none;--dial-size:min(300px,60vh);}
     #pressurePanel[hidden]{display:none;}
-    #pressureDial {position:absolute;right:calc(52px - var(--dial-size)/2);top:50%;transform:translateY(-50%);width:var(--dial-size);height:var(--dial-size);border-radius:50%;background:radial-gradient(circle at 45% 40%,#303238,#17191d);border:1px solid #ffffff44;box-shadow:0 2px 12px #0008;pointer-events:auto;touch-action:none;user-select:none;}
+    #pressureDial {position:absolute;right:calc(0px - var(--dial-size)/2);top:50%;transform:translateY(-50%);width:var(--dial-size);height:var(--dial-size);border-radius:50%;background:radial-gradient(circle at 45% 40%,#303238,#17191d);border:1px solid #ffffff44;box-shadow:0 2px 12px #0008;pointer-events:auto;touch-action:none;user-select:none;}
     #pressureDial svg {width:100%;height:100%;pointer-events:none;}
     #pressureTicks {transform-origin:200px 200px;}
-    #pressureClose {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60px;height:60px;border-radius:50%;background:#3b3d43;color:#ffdb48;border:1px solid #ffffff18;font:32px Arial;cursor:pointer;touch-action:none;}
-    #pressureFields {position:absolute;right:calc(76px + var(--dial-size)/2);top:50%;transform:translateY(-50%);width:145px;pointer-events:auto;}
+    #pressureClose {position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:60px;height:60px;margin-left:-34px;border-radius:50%;background:#3b3d43;color:#ffdb48;border:1px solid #ffffff18;font:32px Arial;cursor:pointer;touch-action:none;}
+    #pressureFields {position:absolute;right:calc(20px + var(--dial-size)/2);top:50%;transform:translateY(-50%);width:145px;pointer-events:auto;}
     .pressure-value-wrap {position:relative;margin:10px 0;}
     #pressureFields input {width:100%;box-sizing:border-box;background:#142032ee;color:white;border:1px solid #ffffffb0;border-radius:8px;padding:13px 48px 13px 9px;font:700 23px/1 Arial;user-select:text;}
     .pressure-unit {position:absolute;right:9px;top:50%;transform:translateY(-50%);font:12px Arial;color:#cfd7e5;pointer-events:none;}
     #pressureError {font:12px/1.4 Arial;color:#ffd09a;background:#142032dd;border-radius:4px;}
-    @media(max-width:480px){#pressurePanel{--dial-size:min(300px,65vh);}#pressureFields{width:125px;}#pressureFields input{font-size:19px;}}
+    @media(max-width:480px){#pressurePanel{--dial-size:min(250px,55vh);}#pressureFields{width:125px;}#pressureFields input{font-size:19px;}}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.12 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.13 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
