@@ -1,18 +1,23 @@
-# KoreaVFR_v2.14
+# KoreaVFR_v2.15
 
-POS 버튼 및 Position Report Assistant 추가.
+Custom Fix / Custom Waypoint IndexedDB 기기 저장.
 
-파일: index.html, js/position-report.mjs, js/position-report-ui.mjs, tests/position-report.test.mjs.
-기준점: 로컬 AIRPORT_POINTS_GEOJSON + 저장된 customFixes. 네트워크 호출 없음.
-위치: 현재 빌드의 aircraft 시뮬레이션 좌표. 기존 updateAircraftPosition 호출 시 POS 갱신, 최대 5Hz.
-계산: Haversine NM, 기준점→항공기 초기 진방위. 동좌표 방향은 AT REF/---.
-방향: N/E/S/W ±10°, 나머지 NE/SE/SW/NW. 소수 방위도 빈 구간 없이 분류.
-Radial: 반올림 후 000~359. 모듈은 UI/브라우저 API에 의존하지 않음.
-드롭다운: 데이터 거리순 계산 후 DOM 10개씩 렌더링. 끝 스크롤 또는 안내 버튼으로 10개 추가.
-닫기: X 또는 지도 클릭. 내부 조작은 이벤트 격리.
+DB koreaVfrDb v1 / customWaypoints / keyPath id (UUID).
+필드: id,name,latitude,longitude,note,createdAt,updatedAt + 기존 radiusNM,고도,AGL/MSL.
+Repository API: getAllCustomWaypoints,getCustomWaypointById,addCustomWaypoint,updateCustomWaypoint,deleteCustomWaypoint.
 
-node --test tests/*.test.mjs
-POS 21개 + 기존 기압계 5개 = 26개 통과.
-기능 계산은 로컬에서 오프라인 동작. 앱 초기 로드와 외부 지도 자원까지 오프라인 지원하는 것은 아님.
-실제 GPS는 아직 미구현. 실기기 지도 이벤트 및 패널 배치 확인 필요.
-ZIP 내용물을 js/assets 포함 GitHub 루트에 업로드.
+- 팝업 자동 저장/닫기/Route 설정은 transaction 완료 후 성공 처리.
+- 실패 시 팝업 유지 및 상태 표시. 저장 도중 팝업 입력 잠금.
+- FIX 드래그 종료 시 좌표 저장, 실패 시 원래 위치 복귀.
+- 삭제 transaction 성공 후 지도 제거. 새 미저장 draft는 DB 삭제 없이 제거.
+- 앱 지도 초기화 시 저장소를 읽어 기존 핀/반경/3D/POS 후보로 복원.
+- Note 입력 필드 추가. Aerodrome 정적 데이터는 변경 없음.
+- 사용자 데이터에 외부 API/서버/GitHub 저장 없음.
+
+검증: node --test tests/*.test.mjs — 28개 통과.
+IndexedDB 계약 테스트 더블에서 CRUD, 연결 재개방, 변경/삭제 유지, 네트워크 금지, 실패를 확인.
+실제 브라우저 새로고침/완전 종료·재접속/인터넷 차단 실기기 검증은 미실시.
+앱·지도 리소스의 오프라인 재실행 확보는 기존처럼 별도 작업이 필요.
+브라우저 저장소 삭제/사생활 모드 등은 일반 영구 저장 보장 범위 밖.
+
+ZIP 내용물을 js/assets 포함해 GitHub 루트에 업로드하세요.
