@@ -1092,6 +1092,29 @@
     #measureButton.measure-active {border-color:#78e9ff;box-shadow:0 0 0 2px #78e9ff66;}
     #pressureFields input {font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;color:var(--primary-text);}
     .pressure-unit {font-weight:700;color:var(--secondary-text);}
+  
+    /* Route Info refinement: compact height and consistent VIA controls */
+    .route-info-panel {padding:5px 12px 4px;}
+    .route-info-head {align-items:center;padding:2px 8px 1px;gap:12px;}
+    .route-via-wrap {padding:5px 10px 3px;border-radius:12px;}
+    .route-via-title {margin-bottom:2px;line-height:12px;}
+    .route-strip {padding:0 2px 0;}
+    .route-strip-inner {align-items:center;}
+    .route-node-stack {align-items:flex-start;justify-content:center;gap:5px;padding:0 42px 0 0;min-height:96px;}
+    .route-node-card {box-sizing:border-box;min-height:44px;height:44px;min-width:110px;max-width:145px;padding:8px 10px;justify-content:flex-start;text-align:left;}
+    .route-node-stack .route-point-altitude {justify-content:flex-start;gap:6px;}
+    .route-node-stack .route-point-altitude-input {box-sizing:border-box;width:88px;height:44px;min-height:44px;}
+    .route-node-stack .via-remove {top:0;right:0;}
+    .route-node-stack .via-remove::before {width:24px;height:24px;}
+    .route-scroll-hint {margin:0;min-height:0;line-height:12px;}
+    .route-info-foot {padding:3px 8px 3px;gap:14px;}
+    .route-end-altitude {margin-top:7px;}
+    .route-section-label {margin-bottom:5px;}
+    .route-info-tab {margin-top:-1px;}
+    @media (max-width:800px) {
+      .route-info-head {gap:6px;padding:2px 2px 1px;}
+      .route-via-wrap {padding:5px 5px 3px;}
+    }
   </style>
 </head>
 
