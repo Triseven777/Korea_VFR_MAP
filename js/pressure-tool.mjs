@@ -53,11 +53,8 @@ export function mountPressureTool() {
     if(!pointer || pointer.id!==event.pointerId)return;
     event.preventDefault();const next=angle(event);pointer.remainder+=angleDelta(next,pointer.angle);pointer.angle=next;
     const steps=Math.trunc(pointer.remainder/3);if(!steps)return;
-    pointer.remainder-=steps*3;const hundredths=Math.round(state.pressureInHg*100);
-    const minimum=Math.ceil(hPaToInHg(MIN_HPA)*100),maximum=Math.floor(hPaToInHg(MAX_HPA)*100);
-    const nextHundredths=Math.max(minimum,Math.min(maximum,hundredths+steps));
-    const value=inHgToHpa(nextHundredths/100);
-    const change=nextHundredths-hundredths;rotation+=change*3;setHpa(value);
+    pointer.remainder-=steps*3;const value=Math.max(MIN_HPA,Math.min(MAX_HPA,Math.round(state.pressureHpa)+steps));
+    const change=value-Math.round(state.pressureHpa);rotation+=change*3;setHpa(value);
     if(change && typeof navigator.vibrate==='function')navigator.vibrate(5);
   });
   const finish=event=>{if(pointer?.id!==event.pointerId)return;if(dial.hasPointerCapture(event.pointerId))dial.releasePointerCapture(event.pointerId);pointer=null;};
