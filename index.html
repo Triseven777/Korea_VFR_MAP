@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.16</title>
+  <title>KoreaVFR_v2.17</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -983,14 +983,6 @@
     .fix-alt-row button { min-width:60px;background:#244c7a;color:white;border:1px solid #ffffff66;border-radius:6px; }
     #fixCoordinates { line-height:1.6; }
     #fixError { color:#ffb98b;margin-top:8px; }
-    #fixCenterPicker { position:fixed;left:50%;top:50%;z-index:50;width:0;height:0;pointer-events:none; }
-    #fixCenterPicker[hidden] {display:none;}
-    #fixCenterPin { position:absolute;width:36px;height:46px;left:-18px;bottom:10px;color:#ff9d32; }
-    #fixCenterPin svg {width:100%;height:100%;}
-    #fixCenterCross {position:absolute;left:-10px;top:-10px;width:20px;height:20px;}
-    #fixCenterCross::before,#fixCenterCross::after {content:"";position:absolute;left:9px;top:0;width:2px;height:20px;background:#ff3030;transform:rotate(45deg);}
-    #fixCenterCross::after {transform:rotate(-45deg);}
-    #fixCenterConfirm {position:absolute;bottom:62px;left:-60px;width:120px;padding:10px 5px;background:#142032ee;color:#fff;border:1px solid white;border-radius:9px;font:700 14px Arial;pointer-events:auto;}
     .custom-fix-altitude {position:absolute;left:48px;top:0;pointer-events:none;color:#ff9d32;background:none;padding:0;border-radius:0;text-shadow:0 1px 2px #000,0 0 3px #000;-webkit-text-stroke:.25px currentColor;transform:translate(-50%,-50%);text-align:center;font:900 14px/1.3 Arial;white-space:nowrap;}
     .custom-fix-altitude .fix-alt-divider {border-top:1px solid #ff9d32;margin:3px 0;}
     #pressureButton {position:absolute;right:0;bottom:110px;flex-direction:column;gap:2px;font:700 12px/1 Arial;}
@@ -1032,13 +1024,46 @@
     #measureOverlay .ui-map-value {position:absolute;transform:translate(-50%,-50%);color:#7febff;}
     .measure-handle {width:44px;height:44px;border:2px solid #78e9ff;border-radius:50%;background:#122637dd;color:white;font:800 17px Arial;touch-action:none;cursor:grab;}
     .measure-handle.measure-dragging {background:#237d99;border-width:4px;box-shadow:0 0 0 5px #63def94d;}
+    .route-info-panel,#pointPopup,#fixPopup,#posPanel,.airport-popup .maplibregl-popup-content,#posList {background:var(--panel-bg);border:var(--ui-border);border-radius:var(--panel-radius);box-shadow:var(--panel-shadow);color:white;padding:24px;box-sizing:border-box;}
+    .route-info-panel {max-height:36vh;overflow:auto;}
+    .route-info-head {display:grid;grid-template-columns:minmax(145px,190px) minmax(0,1fr) minmax(145px,190px);gap:14px;}
+    .route-via-wrap,.route-strip {min-width:0;}.route-strip {overflow-x:auto;touch-action:pan-x;}
+    .route-node-stack {position:relative;padding-right:44px;}.route-node-card {cursor:pointer;font-size:18px;min-height:44px;display:flex;align-items:center;}
+    .via-delete {position:absolute;right:0;top:0;min-width:44px;min-height:44px;border:0;background:transparent;color:white;font:24px Arial;}
+    .route-end-name {font-size:20px;}.route-point-altitude-input {min-height:44px;font-size:18px;}.route-leg-mini {font-size:18px;}
+    #fixPopup {bottom:20px;right:80px;}
+    #runtimeStatusBanner {background:var(--panel-bg);border:var(--ui-border);color:white;}
+    #pointPopup,#fixPopup {width:380px;max-width:calc(100vw - 32px);max-height:calc(100vh - 40px);overflow:auto;}
+    #pointPopup .popup-head,#fixPopup strong,.airport-popup-title-ko,.pos-head {font:700 30px/1.2 Arial;}
+    #pointPopup input,#fixPopup input,#posSelect,#pressureFields input {background:#ffffff09;border:var(--ui-border);color:white;border-radius:12px;min-height:44px;font-size:20px;}
+    #fixPopup label,.popup-label,.airport-popup-row,.pos-reference-row {font-size:20px;}
+    .airport-popup-title-en,.airport-popup-label,.route-total-wrap {font-size:20px;}
+    #fixPopup .fix-alt-row button {min-width:64px;min-height:44px;font-size:18px;border:var(--ui-border);border-radius:12px;background:var(--accent-badge-bg);}
+    #popupTitle {padding-right:12px;}
+    .popup-actions {display:flex;flex-wrap:wrap;}
+    .route-info-panel .route-delete-btn,.route-info-tab,.new-route-tab {min-height:44px;}
+    #posPanel {width:min(850px,calc(100vw - 32px));}
+    #pointPopup .popup-btn,#fixPopup .popup-btn,.airport-popup-action {min-height:44px;min-width:44px;font-size:18px;border:var(--ui-border);border-radius:12px;background:#ffffff09;color:white;}
+    #popupSave,#fixSave {background:var(--accent-badge-bg);}
+    #popupDelete,#fixDelete,.route-delete-btn {background:#b62f3d;}
+    #popupClose,#fixClose,#posClose,#pressureClose {width:48px;height:48px;min-width:48px;border:var(--ui-border);border-radius:50%;background:#343b46;color:white;font-size:30px;}
+    .popup-actions {gap:14px;}.airport-popup-actions {display:flex;flex-wrap:wrap;gap:14px;}
+    .airport-popup-action.departure,.airport-popup-action.destination {background:#ffffff09;}
+    #posReport {font-size:22px;}#posDistance {font:800 38px Arial;}#posDirection {background:var(--accent-badge-bg);color:var(--accent-blue);}
+    #posSelected,#posSelectedDistance {font-size:20px;}#posList {max-height:50vh;}#posSelect {min-height:48px;}
+    #toolRemote {position:fixed;right:16px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:12px;padding:12px;background:var(--panel-bg);border:var(--ui-border);border-radius:var(--panel-radius);box-shadow:var(--panel-shadow);}
+    #toolRemote .nav-control-btn {position:static;width:52px;height:52px;min-width:44px;min-height:44px;}
+    #toolRemote #pressureButton {font-size:14px;}#toolRemote #posButton {font-size:12px;}
+    #fixCreateHint {position:fixed;top:22%;left:50%;transform:translateX(-50%);z-index:90;pointer-events:none;}
+    #fixCreateHint[hidden] {display:none;}#fixCenterPicker {display:none !important;}
+    #pressurePanel {--dial-size:min(270px,58vh);}#pressureFields {width:165px;}#pressureFields input {font-size:34px;padding-right:48px;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.16 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.17 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1077,7 +1102,7 @@
     <button id="newRouteBtn" class="new-route-tab" type="button">+ New Route</button>
   </div>
 
-  <div id="pointPopup" class="point-popup" hidden>
+  <div id="pointPopup" class="point-popup ui-editor" hidden>
     <div class="popup-head">
       <span id="popupTitle">포인트 설정</span>
       <button id="popupClose" class="popup-close" type="button" aria-label="닫기">×</button>
@@ -1093,6 +1118,7 @@
     <button id="samePointBtn" class="same-point-btn" type="button" hidden>출발/도착 동일</button>
 
     <div class="popup-actions">
+      <button id="popupCancel" class="popup-btn" type="button">취소</button>
       <button id="popupSave" class="popup-btn popup-save" type="button">저장</button>
       <button id="popupDelete" class="popup-btn popup-delete" type="button">삭제</button>
     </div>
@@ -1130,8 +1156,7 @@
   </div>
 
 
-    <div id="fixCenterPicker" hidden><button id="fixCenterConfirm" type="button">FIX설정하기</button><div id="fixCenterPin"></div><div id="fixCenterCross"></div></div>
-    <section id="fixPopup" hidden aria-label="커스텀 픽스 설정">
+    <section id="fixPopup" class="ui-editor" hidden aria-label="커스텀 픽스 설정">
       <div style="display:flex;justify-content:space-between"><strong>FIX 설정 · 기기 저장</strong><button id="fixClose" class="popup-close" aria-label="닫기">×</button></div>
       <label for="fixName">픽스 명</label><input id="fixName" maxlength="40" />
       <label>좌표</label><div id="fixCoordinates"></div>
@@ -1141,8 +1166,10 @@
       <label for="fixLower">하단고도 (ft)</label><div class="fix-alt-row"><input id="fixLower" type="number" min="0" max="60000" /><button id="fixLowerRef" type="button">MSL</button></div>
       <div id="fixError" role="status"></div>
       <div style="display:flex;gap:6px;margin-top:14px"><button id="fixDeparture" class="popup-btn">출발지 설정</button><button id="fixVia" class="popup-btn">경유지 설정</button><button id="fixDestination" class="popup-btn">도착지 설정</button></div>
-      <div class="popup-actions"><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
+      <div class="popup-actions"><button id="fixCancel" class="popup-btn">취소</button><button id="fixSave" class="popup-btn">저장</button><button id="fixDelete" class="popup-btn popup-delete">삭제</button></div>
     </section>
+    <div id="toolRemote"></div>
+    <div id="fixCreateHint" class="ui-floating-panel" hidden>FIX를 지정할 위치를 탭하세요</div>
     <div id="measureHint" class="ui-floating-panel" hidden></div>
     <div id="measureOverlay" hidden><svg aria-hidden="true"><defs><marker id="measureArrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#5ee5ff" /></marker></defs><line id="measureLine" stroke="#5ee5ff" stroke-width="3" marker-start="url(#measureArrow)" marker-end="url(#measureArrow)" /></svg><span id="measureDistance" class="ui-map-value"></span><span id="measureAB" class="ui-map-value"></span><span id="measureBA" class="ui-map-value"></span></div>
     <section id="posPanel" hidden aria-label="Position Report">
@@ -1156,6 +1183,8 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { confirmAction } from "./js/ui-confirm.mjs";
+  import { createInteractionController } from "./js/interaction-mode.mjs";
   import { mountMeasureDistance } from "./js/measure-distance-ui.mjs";
   import * as waypointRepository from "./js/data/custom-waypoint-repository.mjs";
   import { createWaypointId } from "./js/models/custom-waypoint.mjs";
@@ -1165,6 +1194,7 @@
   import * as maplibregl from "https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.mjs";
 
   (async () => {
+    const interaction = createInteractionController();
     let magvarFn = null;
 
     try {
@@ -1445,6 +1475,10 @@
       });
 
       actions.appendChild(departureBtn);
+      if(route.length>=2){
+        const viaBtn=document.createElement("button");viaBtn.type="button";viaBtn.className="airport-popup-action";viaBtn.textContent="경유지로 추가";
+        viaBtn.addEventListener("click",event=>{event.stopPropagation();const point=airportFeatureToRoutePoint(feature);point.altitudeMslFeet=routePointAltitudeFeet(route[route.length-2])??0;route.splice(route.length-1,0,point);renderRoute({autoOpen:true});activeAirportPopup?.remove();});actions.appendChild(viaBtn);
+      }
       actions.appendChild(destinationBtn);
 
       root.appendChild(titleKo);
@@ -3626,7 +3660,11 @@
       el.textContent = displayPointName(point, index);
       el.title = displayPointName(point, index);
 
-      stack.appendChild(el);
+      el.tabIndex=0;el.setAttribute("role","button");el.addEventListener("keydown",event=>{if(event.key==="Enter")el.click();});
+      el.addEventListener("click",()=>openPointPopup(point.id,pointMarkers[index]?.getElement()??el));
+      const remove=document.createElement("button");remove.type="button";remove.className="via-delete";remove.textContent="×";remove.setAttribute("aria-label",`${displayPointName(point,index)} 삭제`);
+      remove.addEventListener("click",()=>confirmRemoveRoutePoint(point.id));
+      stack.append(el,remove);
       stack.appendChild(createRoutePointAltitudeControl(point, index));
       return stack;
     }
@@ -3716,6 +3754,7 @@
     });
 
     newRouteBtn.addEventListener("click", () => {
+      if(!interaction.setMode("ROUTE_EDIT"))return;
       routeModeActive = true;
       sameOriginDestination = false;
       pendingDestinationAirport = null;
@@ -3724,7 +3763,7 @@
     });
 
     routeDeleteBtn.addEventListener("click", () => {
-      resetRoute(true);
+      confirmDeleteRoute();
     });
 
 
@@ -4224,6 +4263,18 @@
       refreshRoute3D();
     }
 
+    function removeRoutePoint(pointId) {
+      const index=route.findIndex(p=>p.id===pointId);if(index<0)return;
+      route.splice(index,1);closePointPopup();sameOriginDestination=false;renderRoute();
+      if(route.length===0)resetRoute(true);
+    }
+    async function confirmRemoveRoutePoint(pointId) {
+      const index=route.findIndex(p=>p.id===pointId);if(index<0)return;
+      if(await confirmAction({title:"이 경유지를 삭제하시겠습니까?",message:displayPointName(route[index],index)}))removeRoutePoint(pointId);
+    }
+    async function confirmDeleteRoute() {
+      if(await confirmAction({title:"전체 경로를 삭제하시겠습니까?",message:"모든 경로 포인트가 삭제됩니다."}))resetRoute(true);
+    }
     function resetRoute(deactivate = false) {
       route = [];
       clearPointMarkers();
@@ -4254,9 +4305,8 @@
         latitude: lngLat.lat
       });
 
-      renderRoute({
-        autoOpen: route.length === 2
-      });
+      renderRoute({autoOpen: route.length === 2});
+      if(route.length>=2)interaction.setMode("NORMAL");
     }
 
     function nearestSegmentIndex(point) {
@@ -4289,6 +4339,8 @@
     }
 
     function openPointPopup(pointId, markerElement) {
+      if(!fixPopup.hidden){showRuntimeStatus("FIX 편집을 저장하거나 취소하세요.");return;}
+      if(!popup.hidden&&pointEditorDirty()){showRuntimeStatus("현재 포인트 편집을 저장하거나 취소하세요.");return;}
       selectedPointId = pointId;
       const point = route.find(p => p.id === pointId);
       if (!point) return;
@@ -4301,14 +4353,14 @@
       samePointBtn.hidden = !(route.length === 1 && index === 0);
 
       const rect = markerElement.getBoundingClientRect();
-      const popupWidth = 240;
+      const popupWidth = 380;
       const left = Math.min(
         Math.max(10, rect.right + 8),
         window.innerWidth - popupWidth - 10
       );
       const top = Math.min(
         Math.max(10, rect.top - 10),
-        window.innerHeight - 290
+        window.innerHeight - 430
       );
 
       popup.style.left = `${left}px`;
@@ -4321,7 +4373,10 @@
       selectedPointId = null;
     }
 
-    popupClose.addEventListener("click", closePointPopup);
+    function pointEditorDirty(){const point=route.find(p=>p.id===selectedPointId);return !!point&&(pointNameInput.value!==(point.name||"")||Number(pointAltitudeInput.value)!==routePointAltitudeFeet(point));}
+    async function requestClosePoint(){if(pointEditorDirty()&&!(await confirmAction({title:"변경사항을 저장하지 않고 닫으시겠습니까?",cancelText:"계속 편집",confirmText:"변경 취소"})))return;closePointPopup();}
+    popupClose.addEventListener("click", requestClosePoint);
+    document.getElementById("popupCancel").addEventListener("click",requestClosePoint);
 
     popupSave.addEventListener("click", () => {
       if (selectedPointId == null) return;
@@ -4341,17 +4396,7 @@
       renderRoute();
     });
 
-    popupDelete.addEventListener("click", () => {
-      if (selectedPointId == null) return;
-
-      const idx = route.findIndex(p => p.id === selectedPointId);
-      if (idx < 0) return;
-
-      route.splice(idx, 1);
-      closePointPopup();
-      sameOriginDestination = false;
-      renderRoute();
-    });
+    popupDelete.addEventListener("click",()=>{if(selectedPointId!=null)confirmRemoveRoutePoint(selectedPointId);});
 
     samePointBtn.addEventListener("click", () => {
       if (route.length !== 1) return;
@@ -4369,12 +4414,6 @@
       sameOriginDestination = true;
       closePointPopup();
       renderRoute({ autoOpen: true });
-    });
-
-    document.addEventListener("pointerdown", (ev) => {
-      if (!popup.hidden && !popup.contains(ev.target)) {
-        closePointPopup();
-      }
     });
 
     document.addEventListener("pointerup", () => {
@@ -4676,7 +4715,8 @@
       });
 
       function startRouteDrag(lngLat, source = "mouse", screenPoint = null) {
-        if (fixModeActive || !routeModeActive) return false;
+        if (fixModeActive || interaction.getMode()==="MEASURE" || !routeModeActive || !popup.hidden || !fixPopup.hidden) return false;
+        if(!interaction.setMode("ROUTE_EDIT"))return false;
         if (route.length < 2) return false;
         if (pointPointerActive || suppressNextRouteDrag) return false;
 
@@ -4803,85 +4843,42 @@
         renderRoute();
       }
 
-      // Desktop mouse support.
-      map.on("mousedown", "route-hit", (e) => {
-        if (e.originalEvent && e.originalEvent.button != null && e.originalEvent.button !== 0) return;
-        e.preventDefault();
-        startRouteDrag(e.lngLat, "mouse", e.point);
-      });
-
-      map.on("mousemove", (e) => {
-        if (!dragState.active || dragState.source !== "mouse") return;
-        moveRouteDrag(e.lngLat, e.point);
-      });
-
-      map.on("mouseup", (e) => {
-        if (!dragState.active || dragState.source !== "mouse") return;
-        finishRouteDrag(e.lngLat);
-      });
-
-      // iPad / touch support.
-      // Only ONE finger may start a route-line drag.
-      // Two fingers are deliberately left to MapLibre for pitch/zoom/rotate.
-      map.on("touchstart", "route-hit", (e) => {
-        const touches = e.originalEvent?.touches;
-        if (!touches || touches.length !== 1) return;
-
-        e.preventDefault();
-        startRouteDrag(e.lngLat, "touch", e.point);
-      });
-
-      map.on("touchmove", (e) => {
-        if (!dragState.active || dragState.source !== "touch") return;
-
-        const touches = e.originalEvent?.touches;
-        if (!touches || touches.length !== 1) {
-          cancelRouteDrag();
-          return;
-        }
-
-        if (touchPressState.moved) {
-          dragState.touchMoved = true;
-        }
-
-        moveRouteDrag(e.lngLat, e.point);
-      });
-
-      map.on("touchend", (e) => {
-        if (!dragState.active || dragState.source !== "touch") return;
-
-        const duration = dragState.touchStartTime == null
-          ? 0
-          : performance.now() - dragState.touchStartTime;
-
-        const isLongStationaryPress =
-          duration >= LONG_PRESS_MS &&
-          !dragState.touchMoved &&
-          !touchPressState.moved;
-
-        if (
-          isLongStationaryPress ||
-          dragState.longPressCancelled ||
-          longPressSuppressed()
-        ) {
-          suppressTapUntil = performance.now() + 900;
-          cancelRouteDrag();
-          return;
-        }
-
-        finishRouteDrag(dragState.currentLngLat || e.lngLat);
-      });
-
-      map.on("touchcancel", () => {
-        if (dragState.active && dragState.source === "touch") {
-          cancelRouteDrag();
-        }
-      });
+      let routePress=null;
+      function clearRoutePress(){if(routePress){clearTimeout(routePress.timer);if(mapCanvas.hasPointerCapture(routePress.id))mapCanvas.releasePointerCapture(routePress.id);routePress=null;}cancelRouteDrag();setPreview([]);}
+      mapCanvas.addEventListener("pointerdown",event=>{
+        if(event.button!==0||routePress||pointPointerActive||interaction.getMode()==="MEASURE"||fixModeActive||!popup.hidden||!fixPopup.hidden)return;
+        const rect=mapCanvas.getBoundingClientRect(),pt={x:event.clientX-rect.left,y:event.clientY-rect.top};
+        if(!map.queryRenderedFeatures(pt,{layers:["route-hit"]}).length)return;
+        const state={id:event.pointerId,x:event.clientX,y:event.clientY,point:pt,active:false,timer:null};routePress=state;
+        state.timer=setTimeout(()=>{
+          if(routePress!==state)return;
+          const ll=map.unproject(state.point);
+          if(!startRouteDrag(ll,"pointer",state.point)){routePress=null;return;}
+          state.active=true;mapCanvas.setPointerCapture(state.id);suppressTapUntil=0;
+          const i=dragState.segmentIndex;setPreview([[route[i].longitude,route[i].latitude],[route[i+1].longitude,route[i+1].latitude]]);
+          dragHint.textContent="경로 편집 중 — 드래그하여 경유지 추가";dragHint.classList.add("show");
+        },500);
+      },true);
+      mapCanvas.addEventListener("pointermove",event=>{
+        const state=routePress;if(!state||state.id!==event.pointerId)return;
+        if(!state.active){if(Math.hypot(event.clientX-state.x,event.clientY-state.y)>8){clearTimeout(state.timer);routePress=null;}return;}
+        event.preventDefault();event.stopImmediatePropagation();const rect=mapCanvas.getBoundingClientRect(),pt={x:event.clientX-rect.left,y:event.clientY-rect.top};moveRouteDrag(map.unproject(pt),pt);
+      },true);
+      mapCanvas.addEventListener("pointerup",event=>{
+        if(!routePress||routePress.id!==event.pointerId)return;
+        const state=routePress;clearTimeout(state.timer);routePress=null;
+        if(state.active){event.stopImmediatePropagation();finishRouteDrag(dragState.currentLngLat);if(mapCanvas.hasPointerCapture(state.id))mapCanvas.releasePointerCapture(state.id);suppressTapUntil=performance.now()+700;interaction.setMode("NORMAL");}
+      },true);
+      mapCanvas.addEventListener("pointercancel",clearRoutePress,true);
+      mapCanvas.addEventListener("touchstart",event=>{if(event.touches.length>1)clearRoutePress();else if(routePress?.active){event.preventDefault();event.stopImmediatePropagation();}},{capture:true,passive:false});
+      mapCanvas.addEventListener("touchmove",event=>{if(event.touches.length>1)clearRoutePress();else if(routePress?.active){event.preventDefault();event.stopImmediatePropagation();}},{capture:true,passive:false});
+      interaction.subscribe((next,previous)=>{if(previous==="ROUTE_EDIT"&&next!=="ROUTE_EDIT")clearRoutePress();});
 
       function handleMapTap(e) {
         if (longPressSuppressed()) return;
         if (dragState.active) return;
-        if (fixModeActive || measureTool?.isSelecting()) return;
+        if(fixModeActive){if(!selectedFix){fixCreateHint.hidden=true;createCustomFix(e.lngLat);}return;}
+        if(interaction.getMode()==="MEASURE")return;
         if (!routeModeActive) return;
 
         const features = map.queryRenderedFeatures(e.point, {
@@ -4912,7 +4909,7 @@
           return;
         }
 
-        if (sameOriginDestination) {
+        if (sameOriginDestination && interaction.getMode()==="ROUTE_EDIT") {
           const insertIndex = route.length - 1;
           const inheritedAltitude = routePointAltitudeFeet(route[insertIndex - 1]) ?? 0;
 
@@ -4947,24 +4944,9 @@
     const fixModeBtn = document.getElementById("fixModeBtn");
     const fixInput = id => document.getElementById(id);
     const pinSvg = `<svg viewBox="0 0 24 30"><path d="M12 29S2 17 2 11a10 10 0 0 1 20 0c0 6-10 18-10 18Z" fill="currentColor" stroke="white" stroke-width="1.2"/><circle cx="12" cy="11" r="4" fill="#142032"/></svg>`;
-    const fixCenterPicker = document.getElementById("fixCenterPicker");
-    document.getElementById("fixCenterPin").innerHTML = pinSvg;
-    document.getElementById("fixCenterConfirm").addEventListener("click", () => {
-      const rect = map.getCanvas().getBoundingClientRect();
-      const location = map.unproject([window.innerWidth / 2 - rect.left, window.innerHeight / 2 - rect.top]);
-      fixCenterPicker.hidden = true;
-      createCustomFix(location);
-    });
-    fixModeBtn.addEventListener("click", async () => {
-      fixModeActive = !fixModeActive;
-      fixModeBtn.classList.toggle("active", fixModeActive);
-      fixModeBtn.setAttribute("aria-pressed", String(fixModeActive));
-      fixCenterPicker.hidden = !fixModeActive;
-      if (fixModeActive) followSuspendedByUser = true;
-      if (!fixModeActive && selectedFix && !(await saveCurrentFix())) {
-        fixModeActive = true; fixModeBtn.classList.add("active");fixModeBtn.setAttribute("aria-pressed","true");
-      }
-    });
+    const fixCreateHint=document.getElementById("fixCreateHint");
+    let fixEditorSnapshot=null;
+    fixModeBtn.addEventListener("click",()=>interaction.setMode(interaction.getMode()==="FIX_CREATE"?"NORMAL":"FIX_CREATE"));
     function resolveFixLabelCollisions() {
       const routeRects = [...pointMarkers.map(m => m.getElement()),
         ...legMarkers.map(m => m.getElement()).filter(el => el.style.display !== "none")]
@@ -5010,8 +4992,10 @@
       return "";
     }
     async function openFixPopup(fix) {
-      if (selectedFix && selectedFix !== fix && !(await saveCurrentFix())) return;
+      if(!popup.hidden){showRuntimeStatus("포인트 편집을 저장하거나 취소하세요.");return;}
+      if(selectedFix&&selectedFix!==fix){showRuntimeStatus("현재 FIX 편집을 저장하거나 취소하세요.");return;}
       selectedFix = fix;
+      fixEditorSnapshot=JSON.parse(JSON.stringify(fix));
       fixInput("fixName").value = fix.name;
       fixInput("fixNote").value = fix.note ?? "";
       fixInput("fixRadius").value = fix.radiusNM;
@@ -5020,12 +5004,19 @@
       fixInput("fixUpperRef").textContent = fix.upperRef;
       fixInput("fixLowerRef").textContent = fix.lowerRef;
       fixInput("fixCoordinates").textContent = `${formatLat(fix.latitude)} / ${formatLon(fix.longitude)}`;
-      fixInput("fixError").textContent = "기기에 저장됩니다. AGL 3D는 DEM이 로드된 영역에서 표시됩니다.";
+      fixInput("fixError").textContent = "저장 버튼을 눌러 변경사항을 기기에 저장하세요.";
       fixPopup.hidden = false;
     }
-    function closeFixPopup() {
-      if (selectedFix) saveCurrentFix();
-      else fixPopup.hidden = true;
+    function fixEditorDirty(){
+      if(!selectedFix)return false;
+      return !selectedFix.saved||JSON.stringify(readFixEditor())!==JSON.stringify({...selectedFix,name:selectedFix.name,note:selectedFix.note??""});
+    }
+    async function closeFixPopup(){
+      if(waypointSavePending)return;
+      if(fixEditorDirty()&&!(await confirmAction({title:"변경사항을 저장하지 않고 닫으시겠습니까?",cancelText:"계속 편집",confirmText:"변경 취소"})))return;
+      if(selectedFix&&!selectedFix.saved){await removeCustomFix(selectedFix.id);}
+      else if(selectedFix&&fixEditorSnapshot){Object.assign(selectedFix,fixEditorSnapshot);fixMarkers.get(selectedFix.id)?.setLngLat([selectedFix.longitude,selectedFix.latitude]);updateCustomFixSource();}
+      selectedFix=null;fixEditorSnapshot=null;fixPopup.hidden=true;interaction.setMode("NORMAL");
     }
     function reportWaypointError(error) {
       console.error("Custom Waypoint storage:",error);
@@ -5042,7 +5033,7 @@
       return true;
     }
     async function createCustomFix(lngLat, restored = null) {
-      if (!restored && selectedFix && !(await saveCurrentFix())) return;
+      if(!restored&&selectedFix)return;
       const fix = restored ?? {id: createWaypointId(), name:`FIX ${nextFixId++}`, latitude:lngLat.lat, longitude:lngLat.lng, radiusNM:0, lowerFeet:null, upperFeet:null, lowerRef:"MSL", upperRef:"MSL", saved:false};
       customFixes.push(fix);
       const el = document.createElement("div"); el.className = "custom-fix-pin"; el.innerHTML = pinSvg;
@@ -5059,7 +5050,7 @@
         state.original={latitude:fix.latitude,longitude:fix.longitude};
         press = state;
         state.timer = setTimeout(() => {
-          if (press !== state || !fix.saved) return;
+          if (press !== state) return;
           state.dragging = true; map.dragPan.disable(); el.setPointerCapture(state.id);
           el.style.color = "#fff";
         },500);
@@ -5086,7 +5077,7 @@
         el.style.color="";
         if (wasDragged || press.moved) suppressTapUntil=performance.now()+700;
         press=null;
-        if(wasDragged){
+        if(wasDragged&&selectedFix!==fix){
           try{Object.assign(fix,await waypointRepository.updateCustomWaypoint(fix));}
           catch(error){Object.assign(fix,original);marker.setLngLat([fix.longitude,fix.latitude]);updateCustomFixSource();reportWaypointError(error);}
         }
@@ -5098,8 +5089,14 @@
     }
     for (const id of ["fixUpperRef","fixLowerRef"]) fixInput(id).addEventListener("click",()=>{fixInput(id).textContent=fixInput(id).textContent === "MSL" ? "AGL" : "MSL";});
     fixInput("fixClose").addEventListener("click",closeFixPopup);
-    fixInput("fixDelete").addEventListener("click",async()=>{if(selectedFix && !(await removeCustomFix(selectedFix.id)))return;selectedFix=null;fixPopup.hidden=true;});
+    fixInput("fixDelete").addEventListener("click",async()=>{if(selectedFix && !(await removeCustomFix(selectedFix.id)))return;selectedFix=null;fixEditorSnapshot=null;fixPopup.hidden=true;interaction.setMode("NORMAL");});
+    fixInput("fixSave").addEventListener("click",saveCurrentFix);
+    fixInput("fixCancel").addEventListener("click",closeFixPopup);
     let waypointSavePending=false;
+    function readFixEditor(){
+      const value=id=>fixInput(id).value.trim()===""?null:Number(fixInput(id).value);
+      return {...selectedFix,name:fixInput("fixName").value.trim(),note:fixInput("fixNote").value,radiusNM:Number(fixInput("fixRadius").value),upperFeet:value("fixUpper"),lowerFeet:value("fixLower"),upperRef:fixInput("fixUpperRef").textContent,lowerRef:fixInput("fixLowerRef").textContent};
+    }
     async function saveCurrentFix() {
       if(waypointSavePending)return false;
       if(!selectedFix)return true;
@@ -5116,16 +5113,10 @@
       finally{waypointSavePending=false;fixPopup.style.pointerEvents="";}
       fixMarkers.get(selectedFix.id).getElement().querySelector(".custom-fix-name").textContent=selectedFix.name;
       updateCustomFixSource();selectedFix=null;fixPopup.hidden=true;
-      fixCenterPicker.hidden=true;
-      fixModeActive=false;fixModeBtn.classList.remove("active");fixModeBtn.setAttribute("aria-pressed","false");
+      fixEditorSnapshot=null;
+      interaction.setMode("NORMAL");
       return true;
     }
-    document.addEventListener("pointerdown",async event=>{
-      if(fixPopup.hidden || fixPopup.contains(event.target) || fixModeBtn.contains(event.target) || fixCenterPicker.contains(event.target))return;
-      event.preventDefault();event.stopPropagation();
-      if (!(await saveCurrentFix()))return;
-      if(event.target === map.getCanvas()) suppressTapUntil=performance.now()+500;
-    },true);
     async function setFixRouteRole(role) {
       if (!selectedFix) return;
       const fix=selectedFix;
@@ -5368,7 +5359,14 @@
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
     }
-    const measureTool = mountMeasureDistance({map,maplibregl});
+    interaction.setGuard(()=>{if(!popup.hidden||!fixPopup.hidden){showRuntimeStatus("편집 내용을 저장하거나 취소한 후 도구를 전환하세요.");return false;}return true;});
+    interaction.subscribe((next)=>{
+      fixModeActive=next==="FIX_CREATE";fixModeBtn.classList.toggle("active",fixModeActive);fixModeBtn.setAttribute("aria-pressed",String(fixModeActive));fixCreateHint.hidden=!fixModeActive||!!selectedFix;
+      setPreview([]);map.dragPan.enable();pointPointerActive=false;suppressNextRouteDrag=false;
+    });
+    const remote=document.getElementById("toolRemote");
+    for(const id of ["measureButton","posButton","pressureButton","fixModeBtn"])remote.appendChild(document.getElementById(id));
+    const measureTool = mountMeasureDistance({map,maplibregl,interaction});
     const positionReport = mountPositionReport({
       getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
       getReferences: () => [
