@@ -1,5 +1,5 @@
 import {calculateMeasurement,createMeasureState,toggleMeasurement,tapMeasurement} from './measure-distance.mjs';
-export function mountMeasureDistance({map,maplibregl,interaction}){
+export function mountMeasureDistance({map,maplibregl}){
  const state=createMeasureState(),button=document.getElementById('measureButton'),hint=document.getElementById('measureHint');
  const overlay=document.getElementById('measureOverlay'),line=document.getElementById('measureLine');
  const labels=['measureDistance','measureAB','measureBA'].map(id=>document.getElementById(id));
@@ -21,7 +21,7 @@ export function mountMeasureDistance({map,maplibregl,interaction}){
  function rebuildMarkers(){
   markers.forEach(m=>{m.measureCleanup?.();m.remove();});markers=[];
   for(const key of ['a','b']){
-   if(!state[key])continue;const el=document.createElement('button');el.type='button';el.className='measure-handle';el.textContent=key.toUpperCase();el.setAttribute('aria-label',`${key.toUpperCase()} 측정점 길게 누른 후 이동`);
+   if(!state[key])continue;const el=document.createElement('button');el.type='button';el.className='measure-handle';el.textContent=key.toUpperCase();el.setAttribute('aria-label',`${key.toUpperCase()} 측정점 길게 누른 후 이동`);el.title='길게 누른 후 드래그하여 이동';
    const marker=new maplibregl.Marker({element:el,anchor:'center'}).setLngLat([state[key].longitude,state[key].latitude]).addTo(map);markers.push(marker);
    let press=null;
    el.addEventListener('pointerdown',event=>{
@@ -40,16 +40,7 @@ export function mountMeasureDistance({map,maplibregl,interaction}){
    for(const type of ['click','touchstart','touchmove','touchend','mousedown'])el.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith('touch')});
   }
  }
- function stopMeasurement(){
-  if(gesture){if(gesture.pan)map.dragPan.enable();if(canvas.hasPointerCapture(gesture.id))canvas.releasePointerCapture(gesture.id);gesture=null;}
-  state.active=false;state.a=null;state.b=null;button.classList.remove('measure-active');button.setAttribute('aria-pressed','false');rebuildMarkers();paint();
- }
- button.addEventListener('click',()=>{
-  if(state.active){if(interaction&&!interaction.setMode('NORMAL'))return;stopMeasurement();return;}
-  if(interaction&&!interaction.setMode('MEASURE'))return;
-  toggleMeasurement(state);button.classList.add('measure-active');button.setAttribute('aria-pressed','true');rebuildMarkers();paint();
- });
- interaction?.subscribe((next,previous)=>{if(previous==='MEASURE'&&next!=='MEASURE')stopMeasurement();});
+ button.addEventListener('click',()=>{if(gesture){if(gesture.pan)map.dragPan.enable();if(canvas.hasPointerCapture(gesture.id))canvas.releasePointerCapture(gesture.id);gesture=null;}toggleMeasurement(state);button.classList.toggle('measure-active',state.active);button.setAttribute('aria-pressed',String(state.active));rebuildMarkers();paint();});
  // Captured first contact supports A→B without releasing. Later gestures keep native pan.
  const canvas=map.getCanvas();
  canvas.addEventListener('pointerdown',event=>{

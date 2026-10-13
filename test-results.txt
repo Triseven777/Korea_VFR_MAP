@@ -1,0 +1,39 @@
+✔ model validation and UUID (1.412781ms)
+✔ CRUD, reopen, update persistence, delete persistence, no network and failures (18.8406ms)
+✔ known coordinate distance and reciprocal bearings (1.167958ms)
+✔ session lifecycle and completed result retained on outside taps (0.285445ms)
+✔ 0 → N (0.949212ms)
+✔ 10 → N (0.099158ms)
+✔ 11 → NE (0.06753ms)
+✔ 79 → NE (0.094611ms)
+✔ 80 → E (0.089704ms)
+✔ 100 → E (0.10137ms)
+✔ 101 → SE (0.099748ms)
+✔ 169 → SE (0.060049ms)
+✔ 170 → S (0.096944ms)
+✔ 190 → S (0.125937ms)
+✔ 191 → SW (0.12113ms)
+✔ 259 → SW (0.063624ms)
+✔ 260 → W (0.044146ms)
+✔ 280 → W (0.093018ms)
+✔ 281 → NW (0.098837ms)
+✔ 349 → NW (0.971886ms)
+✔ 350 → N (0.04679ms)
+✔ 359 → N (0.031036ms)
+✔ known coordinate distance and reference-to-aircraft bearing (0.258705ms)
+✔ radial normalization and fractional boundaries (0.116734ms)
+✔ rank references and invalid coordinates (0.28288ms)
+✔ reference and displayed conversions (0.728624ms)
+✔ round trip preserves precision (0.126788ms)
+✔ direct entry and validation (0.387527ms)
+✔ clockwise delta and wraparound (0.116283ms)
+✔ runtime retention, direct entry, dial, validation and event containment (2.299231ms)
+✔ FROM/TO are protected and VIA deletion preserves scroll (3.439918ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 120.62002

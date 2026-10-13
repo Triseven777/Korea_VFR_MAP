@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.16</title>
+  <title>KoreaVFR_v2.18</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -1032,13 +1032,58 @@
     #measureOverlay .ui-map-value {position:absolute;transform:translate(-50%,-50%);color:#7febff;}
     .measure-handle {width:44px;height:44px;border:2px solid #78e9ff;border-radius:50%;background:#122637dd;color:white;font:800 17px Arial;touch-action:none;cursor:grab;}
     .measure-handle.measure-dragging {background:#237d99;border-width:4px;box-shadow:0 0 0 5px #63def94d;}
+    /* Scoped shared UI skin. Existing map gesture and geometry code is preserved. */
+    .route-info-panel,#pointPopup,#fixPopup,#posPanel,#posList,.airport-popup .maplibregl-popup-content {background:var(--panel-bg);border:var(--ui-border);box-shadow:var(--panel-shadow);color:var(--primary-text);border-radius:var(--panel-radius);}
+    #fixPopup,#posPanel {border-radius:var(--panel-large-radius);}
+    .route-info-panel {padding:12px 16px;overflow:hidden;}
+    .route-info-head {display:grid;grid-template-columns:minmax(120px,19%) minmax(0,1fr) minmax(120px,19%);gap:12px;}
+    .route-end,.route-via-wrap {min-width:0;}.route-end-name {white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .route-strip {min-width:0;overflow-x:auto;overscroll-behavior-x:contain;touch-action:pan-x;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#8ca3bd transparent;}
+    .route-strip-inner {width:max-content;min-width:100%;padding-right:12px;}
+    .route-node-stack {position:relative;padding-top:2px;padding-right:44px;}
+    .via-remove {position:absolute;right:0;top:0;width:44px;height:44px;display:grid;place-items:center;background:transparent;border:0;color:var(--secondary-text);cursor:pointer;}
+    .via-remove svg {width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;}
+    .route-scroll-hint {font:11px Arial;color:var(--secondary-text);text-align:center;min-height:14px;margin-top:2px;}
+    .route-direct-label {color:var(--secondary-text);font:700 12px Arial;text-align:center;}
+    .route-node-card {min-height:44px;display:flex;align-items:center;cursor:pointer;}
+    .route-point-altitude-input {min-height:44px;font-variant-numeric:tabular-nums;background:var(--input-bg);border:var(--ui-border);color:var(--primary-text);}
+    .route-info-foot {flex-shrink:0;}.route-delete-btn {min-height:44px;background:var(--danger-bg);border:var(--ui-border);border-radius:12px;}
+    #pointPopup {width:290px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px;}
+    #fixPopup {width:300px;max-height:calc(100dvh - 40px);bottom:20px;padding:18px;overflow:auto;}
+    .popup-head,#fixPopup strong {font-size:20px;font-weight:700;}
+    .popup-input,#fixPopup input,#posSelect,#pressureFields input {background:var(--input-bg);border:var(--ui-border);color:var(--primary-text);border-radius:12px;min-height:44px;font-variant-numeric:tabular-nums;}
+    .popup-input,#fixPopup input {font-size:18px;}
+    .popup-btn,.airport-popup-action,.same-point-btn {min-width:44px;min-height:44px;border:var(--ui-border);border-radius:12px;font-weight:700;}
+    .popup-save {background:var(--ui-badge-bg);}.popup-delete {background:var(--danger-bg);}
+    #popupClose,#fixClose,#posClose,#pressureClose,.airport-popup .maplibregl-popup-close-button {width:44px;min-width:44px;height:44px;border:var(--ui-border);border-radius:50%;background:#343b46;color:white;font-size:28px;}
+    #fixPopup label {margin-top:14px;color:var(--secondary-text);font-size:14px;}
+    .fix-alt-row {gap:12px;} .fix-alt-row button {min-width:64px;min-height:44px;border:var(--ui-border);border-radius:12px;font:700 14px Arial;}
+    .fix-alt-row button[data-reference="MSL"] {background:var(--ui-badge-bg);color:white;}
+    .fix-alt-row button[data-reference="AGL"] {background:#334b42;color:#ccf3dc;}
+    #fixPopup .popup-actions {margin-top:16px;border-top:var(--ui-border);padding-top:14px;}
+    .airport-popup .maplibregl-popup-content {padding:18px;max-width:calc(100vw - 40px);}
+    .airport-popup-title-ko {font-size:20px;line-height:1.4;padding-right:40px;}
+    .airport-popup-title-en,.airport-popup-label {color:var(--secondary-text);}
+    .airport-popup-actions {gap:12px;}.airport-popup-action {height:48px;}
+    #posPanel {padding:18px;}#posSelect {min-height:48px;}
+    #posList {left:18px;right:18px;width:auto;top:calc(100% - 1px);border-top-left-radius:0;border-top-right-radius:0;max-height:min(440px,calc(100dvh - 210px));padding:8px;overscroll-behavior:contain;}
+    .pos-reference-row {min-height:48px;gap:12px;} .pos-reference-row[aria-selected="true"] {background:var(--ui-badge-bg);}
+    #posDistance {font-variant-numeric:tabular-nums;font-size:30px;}#posDirection {color:var(--accent-blue);}
+    .leg-label-distance,.leg-label-bearing {font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000,0 0 3px #000;}
+    .leg-label {width:64px;height:30px;}.leg-arrow-badge {width:58px;height:28px;}
+    .route-point-coords {background:var(--panel-bg);color:var(--primary-text);border:var(--ui-border);font-variant-numeric:tabular-nums;text-shadow:0 1px 2px #000;}
+    .route-point-dot {box-shadow:0 1px 5px #000b;}.aircraft-marker {z-index:5;}
+    .measure-handle {width:48px;height:48px;}.measure-handle.measure-dragging {box-shadow:0 0 0 5px #63def94d;}
+    #measureButton.measure-active {border-color:#78e9ff;box-shadow:0 0 0 2px #78e9ff66;}
+    #pressureFields input {font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;color:var(--primary-text);}
+    .pressure-unit {font-weight:700;color:var(--secondary-text);}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.16 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.18 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1156,6 +1201,7 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { confirmAction } from "./js/ui-confirm.mjs";
   import { mountMeasureDistance } from "./js/measure-distance-ui.mjs";
   import * as waypointRepository from "./js/data/custom-waypoint-repository.mjs";
   import { createWaypointId } from "./js/models/custom-waypoint.mjs";
@@ -3626,12 +3672,19 @@
       el.textContent = displayPointName(point, index);
       el.title = displayPointName(point, index);
 
-      stack.appendChild(el);
+      el.tabIndex=0;el.setAttribute("role","button");
+      const open=()=>openPointPopup(point.id,pointMarkers[index]?.getElement()??el);
+      el.addEventListener("click",open);el.addEventListener("keydown",event=>{if(event.key==="Enter")open();});
+      const remove=document.createElement("button");remove.type="button";remove.className="via-remove";remove.setAttribute("aria-label",`${displayPointName(point,index)} 삭제`);
+      remove.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></svg>';
+      remove.addEventListener("click",event=>{event.stopPropagation();confirmRemoveRoutePoint(point.id);});
+      stack.append(el,remove);
       stack.appendChild(createRoutePointAltitudeControl(point, index));
       return stack;
     }
 
     function updateRouteInfo({ autoOpen = false } = {}) {
+      const previousScroll=routeStrip.scrollLeft;
       if (!routeModeActive) {
         routeInfoShell.classList.add("hidden");
         newRouteShell.classList.remove("hidden");
@@ -3676,6 +3729,11 @@
       const track = document.createElement("div");
       track.className = "route-strip-inner";
       routeStrip.appendChild(track);
+      const hint=document.createElement("div");hint.className="route-scroll-hint";
+      routeStrip.parentElement.querySelector(".route-scroll-hint")?.remove();routeStrip.parentElement.appendChild(hint);
+      if(route.length===2){const direct=document.createElement("div");direct.className="route-direct-label";direct.textContent="DIRECT";track.appendChild(direct);routeStrip.style.overflowX="hidden";}else routeStrip.style.overflowX="auto";
+      const updateHint=()=>{hint.textContent=track.scrollWidth>routeStrip.clientWidth&&route.length>2?"← 좌우로 스크롤 →":"";};
+      routeStrip.onscroll=updateHint;
 
       let totalNM = 0;
 
@@ -3695,9 +3753,8 @@
 
 
       requestAnimationFrame(() => {
-        if (track.scrollWidth <= routeStrip.clientWidth) {
-          routeStrip.scrollLeft = 0;
-        }
+        routeStrip.scrollLeft=Math.min(previousScroll,Math.max(0,track.scrollWidth-routeStrip.clientWidth));
+        updateHint();
       });
     }
 
@@ -3723,9 +3780,7 @@
       updateRouteInfo({ autoOpen: true });
     });
 
-    routeDeleteBtn.addEventListener("click", () => {
-      resetRoute(true);
-    });
+    routeDeleteBtn.addEventListener("click",confirmDeleteRoute);
 
 
     function syncRouteAltitudeLabels() {
@@ -4224,6 +4279,21 @@
       refreshRoute3D();
     }
 
+    let deleteConfirmPending=false;
+    function removeRoutePoint(pointId){
+      const index=route.findIndex(p=>p.id===pointId);
+      if(index<=0||index>=route.length-1)return false;
+      const scroll=routeStrip.scrollLeft;route.splice(index,1);closePointPopup();renderRoute();routeStrip.scrollLeft=scroll;return true;
+    }
+    async function confirmRemoveRoutePoint(pointId){
+      const index=route.findIndex(p=>p.id===pointId);if(index<=0||index>=route.length-1||deleteConfirmPending)return;
+      deleteConfirmPending=true;
+      try{if(await confirmAction({title:"Waypoint 삭제",message:`경유지 ${displayPointName(route[index],index)}을 비행경로에서 삭제하시겠습니까?`}))removeRoutePoint(pointId);}finally{deleteConfirmPending=false;}
+    }
+    async function confirmDeleteRoute(){
+      if(deleteConfirmPending)return;deleteConfirmPending=true;
+      try{if(await confirmAction({title:"Route 삭제",message:"현재 비행경로 전체를 삭제하시겠습니까?"}))resetRoute(true);}finally{deleteConfirmPending=false;}
+    }
     function resetRoute(deactivate = false) {
       route = [];
       clearPointMarkers();
@@ -4295,13 +4365,14 @@
 
       const index = route.findIndex(p => p.id === pointId);
       popupTitle.textContent = `${displayPointName(point, index)} 설정`;
+      popupDelete.hidden=index===0||index===route.length-1;
       pointNameInput.value = point.name || "";
       pointAltitudeInput.value = String(routePointAltitudeFeet(point) ?? 0);
       pointAltitudeError.hidden = true;
       samePointBtn.hidden = !(route.length === 1 && index === 0);
 
       const rect = markerElement.getBoundingClientRect();
-      const popupWidth = 240;
+      const popupWidth = 290;
       const left = Math.min(
         Math.max(10, rect.right + 8),
         window.innerWidth - popupWidth - 10
@@ -4341,17 +4412,7 @@
       renderRoute();
     });
 
-    popupDelete.addEventListener("click", () => {
-      if (selectedPointId == null) return;
-
-      const idx = route.findIndex(p => p.id === selectedPointId);
-      if (idx < 0) return;
-
-      route.splice(idx, 1);
-      closePointPopup();
-      sameOriginDestination = false;
-      renderRoute();
-    });
+    popupDelete.addEventListener("click",()=>{if(selectedPointId!=null)confirmRemoveRoutePoint(selectedPointId);});
 
     samePointBtn.addEventListener("click", () => {
       if (route.length !== 1) return;
@@ -4372,7 +4433,7 @@
     });
 
     document.addEventListener("pointerdown", (ev) => {
-      if (!popup.hidden && !popup.contains(ev.target)) {
+      if (!deleteConfirmPending && !popup.hidden && !popup.contains(ev.target)) {
         closePointPopup();
       }
     });
@@ -5019,6 +5080,7 @@
       fixInput("fixLower").value = fix.lowerFeet ?? "";
       fixInput("fixUpperRef").textContent = fix.upperRef;
       fixInput("fixLowerRef").textContent = fix.lowerRef;
+      fixInput("fixUpperRef").dataset.reference=fix.upperRef;fixInput("fixLowerRef").dataset.reference=fix.lowerRef;
       fixInput("fixCoordinates").textContent = `${formatLat(fix.latitude)} / ${formatLon(fix.longitude)}`;
       fixInput("fixError").textContent = "기기에 저장됩니다. AGL 3D는 DEM이 로드된 영역에서 표시됩니다.";
       fixPopup.hidden = false;
@@ -5096,9 +5158,19 @@
       el.addEventListener("contextmenu",event=>event.preventDefault());
       if(restored){name.textContent=fix.name;}else openFixPopup(fix);
     }
-    for (const id of ["fixUpperRef","fixLowerRef"]) fixInput(id).addEventListener("click",()=>{fixInput(id).textContent=fixInput(id).textContent === "MSL" ? "AGL" : "MSL";});
+    for (const id of ["fixUpperRef","fixLowerRef"]) fixInput(id).addEventListener("click",()=>{fixInput(id).textContent=fixInput(id).textContent === "MSL" ? "AGL" : "MSL";fixInput(id).dataset.reference=fixInput(id).textContent;});
     fixInput("fixClose").addEventListener("click",closeFixPopup);
-    fixInput("fixDelete").addEventListener("click",async()=>{if(selectedFix && !(await removeCustomFix(selectedFix.id)))return;selectedFix=null;fixPopup.hidden=true;});
+    fixInput("fixDelete").addEventListener("click",async()=>{
+      if(!selectedFix||deleteConfirmPending||waypointSavePending)return;
+      const fix=selectedFix,uses=route.filter(p=>p.customFixId===fix.id).length;
+      deleteConfirmPending=true;
+      try{
+        const message=`FIX ${fix.name}을 삭제하시겠습니까?`+(uses?` 경로에 사용된 ${uses}개 포인트의 이름·좌표는 유지됩니다. 원본 FIX는 제거됩니다.`:"");
+        if(!(await confirmAction({title:"FIX 삭제",message})))return;
+        if(!(await removeCustomFix(fix.id)))return;
+        if(selectedFix===fix){selectedFix=null;fixPopup.hidden=true;}
+      }finally{deleteConfirmPending=false;}
+    });
     let waypointSavePending=false;
     async function saveCurrentFix() {
       if(waypointSavePending)return false;
@@ -5121,6 +5193,7 @@
       return true;
     }
     document.addEventListener("pointerdown",async event=>{
+      if(deleteConfirmPending)return;
       if(fixPopup.hidden || fixPopup.contains(event.target) || fixModeBtn.contains(event.target) || fixCenterPicker.contains(event.target))return;
       event.preventDefault();event.stopPropagation();
       if (!(await saveCurrentFix()))return;
@@ -5367,6 +5440,10 @@
         },
         onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);}
       });
+    }
+    for(const surface of [routeInfoShell,popup,fixPopup]){
+      for(const type of ["pointerdown","pointermove","pointerup","touchstart","touchmove","touchend","mousedown","click","wheel"])
+        surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
     }
     const measureTool = mountMeasureDistance({map,maplibregl});
     const positionReport = mountPositionReport({
