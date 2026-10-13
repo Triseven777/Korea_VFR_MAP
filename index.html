@@ -1048,6 +1048,21 @@
     .route-node-card {min-height:44px;display:flex;align-items:center;cursor:pointer;}
     .route-point-altitude-input {min-height:44px;font-variant-numeric:tabular-nums;background:var(--input-bg);border:var(--ui-border);color:var(--primary-text);}
     .route-info-foot {flex-shrink:0;}.route-delete-btn {min-height:44px;background:var(--danger-bg);border:var(--ui-border);border-radius:12px;}
+    /* Route Info: compact panel and visibly bordered middle scrolling zone */
+    .route-info-panel {padding:6px 12px 4px;}
+    .route-info-head {grid-template-columns:minmax(140px,19%) minmax(0,1fr) minmax(180px,19%);gap:12px;align-items:center;padding:4px 8px 2px;}
+    .route-via-wrap {border:1px solid rgba(183,196,212,.60);border-radius:14px;padding:8px 10px 4px;min-width:0;overflow:hidden;}
+    .route-via-title {margin-bottom:5px;}
+    .route-strip {padding:0 2px 2px;}
+    .route-strip-inner {margin-left:0;margin-right:0;}
+    .route-node-stack {padding-right:42px;}
+    .via-remove {top:0;right:0;width:44px;height:44px;}
+    .via-remove svg {display:none;}
+    .via-remove::before {content:"×";display:grid;place-items:center;width:23px;height:23px;border:1px solid rgba(183,196,212,.8);border-radius:50%;font:700 19px/1 Arial,sans-serif;color:var(--primary-text);background:rgba(42,50,65,.95);}
+    .route-scroll-hint {min-height:0;margin-top:1px;}
+    .route-info-foot {justify-content:flex-end;padding:2px 8px 4px;gap:18px;}
+    .route-end-name {font-size:16px;}
+    @media (max-width:800px) {.route-info-head {grid-template-columns:minmax(100px,19%) minmax(0,1fr) minmax(120px,19%);gap:6px;padding:4px 2px;}.route-via-wrap {padding:6px 5px 3px;}}
     #pointPopup {width:290px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px;}
     #fixPopup {width:300px;max-height:calc(100dvh - 40px);bottom:20px;padding:18px;overflow:auto;}
     .popup-head,#fixPopup strong {font-size:20px;font-weight:700;}
