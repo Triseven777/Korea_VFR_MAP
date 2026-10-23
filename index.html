@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.18</title>
+  <title>KoreaVFR_v2.19</title>
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -1048,21 +1048,6 @@
     .route-node-card {min-height:44px;display:flex;align-items:center;cursor:pointer;}
     .route-point-altitude-input {min-height:44px;font-variant-numeric:tabular-nums;background:var(--input-bg);border:var(--ui-border);color:var(--primary-text);}
     .route-info-foot {flex-shrink:0;}.route-delete-btn {min-height:44px;background:var(--danger-bg);border:var(--ui-border);border-radius:12px;}
-    /* Route Info: compact panel and visibly bordered middle scrolling zone */
-    .route-info-panel {padding:6px 12px 4px;}
-    .route-info-head {grid-template-columns:minmax(140px,19%) minmax(0,1fr) minmax(180px,19%);gap:12px;align-items:center;padding:4px 8px 2px;}
-    .route-via-wrap {border:1px solid rgba(183,196,212,.60);border-radius:14px;padding:8px 10px 4px;min-width:0;overflow:hidden;}
-    .route-via-title {margin-bottom:5px;}
-    .route-strip {padding:0 2px 2px;}
-    .route-strip-inner {margin-left:0;margin-right:0;}
-    .route-node-stack {padding-right:42px;}
-    .via-remove {top:0;right:0;width:44px;height:44px;}
-    .via-remove svg {display:none;}
-    .via-remove::before {content:"×";display:grid;place-items:center;width:23px;height:23px;border:1px solid rgba(183,196,212,.8);border-radius:50%;font:700 19px/1 Arial,sans-serif;color:var(--primary-text);background:rgba(42,50,65,.95);}
-    .route-scroll-hint {min-height:0;margin-top:1px;}
-    .route-info-foot {justify-content:flex-end;padding:2px 8px 4px;gap:18px;}
-    .route-end-name {font-size:16px;}
-    @media (max-width:800px) {.route-info-head {grid-template-columns:minmax(100px,19%) minmax(0,1fr) minmax(120px,19%);gap:6px;padding:4px 2px;}.route-via-wrap {padding:6px 5px 3px;}}
     #pointPopup {width:290px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px;}
     #fixPopup {width:300px;max-height:calc(100dvh - 40px);bottom:20px;padding:18px;overflow:auto;}
     .popup-head,#fixPopup strong {font-size:20px;font-weight:700;}
@@ -1092,36 +1077,27 @@
     #measureButton.measure-active {border-color:#78e9ff;box-shadow:0 0 0 2px #78e9ff66;}
     #pressureFields input {font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;color:var(--primary-text);}
     .pressure-unit {font-weight:700;color:var(--secondary-text);}
-  
-    /* Route Info refinement: compact height and consistent VIA controls */
-    .route-info-panel {padding:5px 12px 4px;}
-    .route-info-head {align-items:center;padding:2px 8px 1px;gap:12px;}
-    .route-via-wrap {padding:5px 10px 3px;border-radius:12px;}
-    .route-via-title {margin-bottom:2px;line-height:12px;}
-    .route-strip {padding:0 2px 0;}
-    .route-strip-inner {align-items:center;}
-    .route-node-stack {align-items:flex-start;justify-content:center;gap:5px;padding:0 42px 0 0;min-height:96px;}
-    .route-node-card {box-sizing:border-box;min-height:44px;height:44px;min-width:110px;max-width:145px;padding:8px 10px;justify-content:flex-start;text-align:left;}
-    .route-node-stack .route-point-altitude {justify-content:flex-start;gap:6px;}
-    .route-node-stack .route-point-altitude-input {box-sizing:border-box;width:88px;height:44px;min-height:44px;}
-    .route-node-stack .via-remove {top:0;right:0;}
-    .route-node-stack .via-remove::before {width:24px;height:24px;}
-    .route-scroll-hint {margin:0;min-height:0;line-height:12px;}
-    .route-info-foot {padding:3px 8px 3px;gap:14px;}
-    .route-end-altitude {margin-top:7px;}
-    .route-section-label {margin-bottom:5px;}
-    .route-info-tab {margin-top:-1px;}
-    @media (max-width:800px) {
-      .route-info-head {gap:6px;padding:2px 2px 1px;}
-      .route-via-wrap {padding:5px 5px 3px;}
-    }
+    #airspaceControl {position:fixed;left:12px;bottom:58px;z-index:55;max-width:calc(100vw - 130px);font:12px Arial;color:#f5f7fa;}
+    #airspaceToggle {min-height:44px;padding:8px 12px;background:var(--panel-bg,rgba(12,18,28,.92));border:1px solid #ffffff47;border-radius:12px;color:white;font:700 12px Arial;}
+    #airspaceToggle[aria-pressed="true"] {color:#4DA3FF;border-color:#4DA3FF;}
+    #airspaceStatus {display:block;background:rgba(12,18,28,.92);padding:5px 8px;border-radius:6px;font-size:11px;}
+    .airspace-popup .maplibregl-popup-content {background:rgba(12,18,28,.92);border:1px solid rgba(255,255,255,.28);border-radius:22px;box-shadow:0 12px 30px rgba(0,0,0,.35);color:#f5f7fa;padding:24px;width:min(460px,calc(100vw - 28px));box-sizing:border-box;}
+    .airspace-popup .maplibregl-popup-close-button {width:48px;height:48px;border:1px solid #ffffff47;border-radius:50%;background:#343b46;color:white;right:12px;top:12px;font-size:28px;}
+    .airspace-popup-body {max-height:min(65dvh,620px);overflow:auto;overscroll-behavior:contain;}
+    .airspace-popup-body h2 {font:700 28px/1.2 Arial;margin:0 50px 18px 0;overflow-wrap:anywhere;}
+    .airspace-detail-row {display:flex;flex-direction:column;gap:5px;margin:14px 0;font:18px/1.4 Arial;overflow-wrap:anywhere;}
+    .airspace-detail-row span {color:#b7c4d4;}.airspace-detail-row strong {font-size:20px;}
+    .airspace-popup-body small {font:12px/1.5 Arial;white-space:pre-wrap;color:#b7c4d4;}
+    .airspace-popup-body summary {min-height:44px;display:flex;align-items:center;color:#4DA3FF;cursor:pointer;}
+    .airspace-popup-body pre {white-space:pre-wrap;font:11px/1.4 monospace;overflow-wrap:anywhere;}
   </style>
 </head>
 
 <body>
   <div id="map"></div>
+  <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.18 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.19 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1239,6 +1215,7 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { createAirspaceLayer } from "./js/map/airspace-layer.mjs";
   import { confirmAction } from "./js/ui-confirm.mjs";
   import { mountMeasureDistance } from "./js/measure-distance-ui.mjs";
   import * as waypointRepository from "./js/data/custom-waypoint-repository.mjs";
@@ -1277,6 +1254,7 @@
 
       style: {
         version: 8,
+        glyphs: new URL("./data/fonts/",window.location.href).href+"{fontstack}/{range}.pbf",
         sources: {
           satellite: {
             type: "raster",
@@ -4713,6 +4691,7 @@
       terrainReady = true;
 
       ensureRouteLayers();
+      void airspaceLayer.initialize().catch(()=>{});
       ensureCustomFixLayers();
       try{
         const records=await waypointRepository.getAllCustomWaypoints();
@@ -5484,6 +5463,7 @@
         surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
     }
     const measureTool = mountMeasureDistance({map,maplibregl});
+    const airspaceLayer=createAirspaceLayer({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)});
     const positionReport = mountPositionReport({
       getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
       getReferences: () => [
@@ -5496,6 +5476,7 @@
     window.movingMap = {
       map,
       customWaypointRepository: waypointRepository,
+      airspaceLayer,
 
       getRoute() {
         return JSON.parse(JSON.stringify(route));

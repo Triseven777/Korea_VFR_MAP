@@ -1,0 +1,271 @@
+{
+  "basis": "2026-10-15",
+  "loaded": 283,
+  "byType": {
+    "FIR": {
+      "loaded": 1,
+      "rendered": 0
+    },
+    "CTA": {
+      "loaded": 13,
+      "rendered": 10
+    },
+    "TMA": {
+      "loaded": 42,
+      "rendered": 38
+    },
+    "CTR": {
+      "loaded": 13,
+      "rendered": 0
+    },
+    "P": {
+      "loaded": 4,
+      "rendered": 0
+    },
+    "R": {
+      "loaded": 63,
+      "rendered": 59
+    },
+    "D": {
+      "loaded": 55,
+      "rendered": 55
+    },
+    "A": {
+      "loaded": 10,
+      "rendered": 8
+    },
+    "CATA": {
+      "loaded": 9,
+      "rendered": 9
+    },
+    "MOA": {
+      "loaded": 60,
+      "rendered": 57
+    },
+    "HTA": {
+      "loaded": 2,
+      "rendered": 2
+    },
+    "ACMI": {
+      "loaded": 5,
+      "rendered": 4
+    },
+    "AAR": {
+      "loaded": 6,
+      "rendered": 6
+    }
+  },
+  "succeeded": 248,
+  "failures": [
+    {
+      "id": "airspace-000",
+      "type": "FIR",
+      "name": "Incheon FIR",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-002",
+      "type": "CTA",
+      "name": "East-sea Low Sector",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-012",
+      "type": "CTA",
+      "name": "West-sea High Sector",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-013",
+      "type": "CTA",
+      "name": "West-sea Low Sector",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-035",
+      "type": "TMA",
+      "name": "Osan Terminal Control Area",
+      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+    },
+    {
+      "id": "airspace-036",
+      "type": "TMA",
+      "name": "Osan Terminal Control Area",
+      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+    },
+    {
+      "id": "airspace-049",
+      "type": "TMA",
+      "name": "Seoul Terminal Control Area",
+      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+    },
+    {
+      "id": "airspace-051",
+      "type": "TMA",
+      "name": "Seoul Terminal Control Area",
+      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+    },
+    {
+      "id": "airspace-056",
+      "type": "CTR",
+      "name": "GANGNEUNG CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-057",
+      "type": "CTR",
+      "name": "HAEMI CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-058",
+      "type": "CTR",
+      "name": "ICHEON CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-059",
+      "type": "CTR",
+      "name": "JINHAE CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-060",
+      "type": "CTR",
+      "name": "JUNGWON CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-061",
+      "type": "CTR",
+      "name": "MOKPO CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-062",
+      "type": "CTR",
+      "name": "NONSAN CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-063",
+      "type": "CTR",
+      "name": "OSAN CONTROL ZONE",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-064",
+      "type": "CTR",
+      "name": "PYEONGTAEK CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-065",
+      "type": "CTR",
+      "name": "SEONGMU CONTROL ZONE",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-066",
+      "type": "CTR",
+      "name": "SOKCHO CONTROL ZONE",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-067",
+      "type": "CTR",
+      "name": "SUWON CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-068",
+      "type": "CTR",
+      "name": "YECHEON CONTROL ZONE",
+      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
+    },
+    {
+      "id": "airspace-069",
+      "type": "P",
+      "name": "RK P518 KOREAN TACTICAL ZONE",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-070",
+      "type": "P",
+      "name": "RK P518E KOREAN TACTICAL ZONE(EAST)",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-071",
+      "type": "P",
+      "name": "RK P518W KOREAN TACTICAL ZONE(WEST)",
+      "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
+    },
+    {
+      "id": "airspace-072",
+      "type": "P",
+      "name": "RK P73 SEOUL",
+      "reason": "두 원의 연결 방식(합집합/접선 연결)이 명시되지 않음"
+    },
+    {
+      "id": "airspace-099",
+      "type": "R",
+      "name": "RK R14 PYEONGDONG",
+      "reason": "자기교차 경계: 순서 추정/보정하지 않음"
+    },
+    {
+      "id": "airspace-111",
+      "type": "R",
+      "name": "RK R155B SEONGJU",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-112",
+      "type": "R",
+      "name": "RK R157 JANGSAN",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-132",
+      "type": "R",
+      "name": "RK R97D CHEOLMAE-D",
+      "reason": "정의되지 않은 경계 지시문/누락된 좌표: alternatecoordinatesequencealsoshowninAIP"
+    },
+    {
+      "id": "airspace-197",
+      "type": "A",
+      "name": "RK A810 HANAM",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-198",
+      "type": "A",
+      "name": "RK A811 BUCHEON",
+      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+    },
+    {
+      "id": "airspace-222",
+      "type": "MOA",
+      "name": "MOA 17",
+      "reason": "자기교차 경계: 순서 추정/보정하지 않음"
+    },
+    {
+      "id": "airspace-229",
+      "type": "MOA",
+      "name": "MOA 23",
+      "reason": "폐영역을 정의할 좌표가 3개 미만"
+    },
+    {
+      "id": "airspace-238",
+      "type": "MOA",
+      "name": "MOA 28",
+      "reason": "중복 꼭짓점/여러 경계 혼합: 임의 정리하지 않음"
+    },
+    {
+      "id": "airspace-274",
+      "type": "ACMI",
+      "name": "ACMI C",
+      "reason": "중복 꼭짓점/여러 경계 혼합: 임의 정리하지 않음"
+    }
+  ]
+}
