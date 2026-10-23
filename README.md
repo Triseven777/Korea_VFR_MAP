@@ -1,10 +1,11 @@
-# KoreaVFR_v2.19 — Airspace Layer v1
+# KoreaVFR_v2.20 — Geometry 패치 복구
 
-v2.18 기반 공역 레이어 추가. 상세 구현·모든 제외 공역·QA는 AIRSPACE_REPORT.md를 확인하세요.
+v2.19 기반. 기존 성공 248개 유지 + patch 17개 복구 = 265개 표시 / 18개 제외.
+원천 공역 DB는 변경하지 않았습니다. 상세 목록/구조/실기기 QA는 AIRSPACE_REPORT.md를 확인하세요.
 
-283개 로드, 248개 변환, 35개 제외. FIR/CTR/P는 원천 경계 의미 부족으로 미표시입니다.
+ZIP 내부의 index.html / data / js / assets를 GitHub 저장소 루트에 함께 업로드하세요.
+실행 중 공역 Boolean 계산은 로컬 번들로 수행하며 외부 요청이 없습니다. 지도/위성 타일의 기존 네트워크 요구사항은 같습니다.
 
-ZIP의 data/js/assets/index.html을 함께 GitHub 저장소 루트에 업로드하세요.
-공역은 기본 ON, 좌측 하단 AIRSPACE ON/OFF.
-단위 테스트: node --test tests/*.test.mjs (41개 통과).
-실제 지도/기기 UI QA는 미완료.
+테스트: `node --test tests/*.test.mjs` — 57개 통과.
+패치 ES module 재생성: `python3 tools/build-airspace-overrides.py`
+실제 지도 및 iPad Safari QA는 추가 확인이 필요합니다.
