@@ -1,61 +1,110 @@
 {
-  "basis": "2026-10-15",
-  "loaded": 283,
-  "byType": {
-    "FIR": {
-      "loaded": 1,
-      "rendered": 0
+  "baselineSuccess": 248,
+  "recovered": [
+    {
+      "id": "airspace-056",
+      "type": "CTR",
+      "name": "GANGNEUNG CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "CTA": {
-      "loaded": 13,
-      "rendered": 10
+    {
+      "id": "airspace-057",
+      "type": "CTR",
+      "name": "HAEMI CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "TMA": {
-      "loaded": 42,
-      "rendered": 38
+    {
+      "id": "airspace-058",
+      "type": "CTR",
+      "name": "ICHEON CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "CTR": {
-      "loaded": 13,
-      "rendered": 0
+    {
+      "id": "airspace-059",
+      "type": "CTR",
+      "name": "JINHAE CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "P": {
-      "loaded": 4,
-      "rendered": 0
+    {
+      "id": "airspace-060",
+      "type": "CTR",
+      "name": "JUNGWON CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "R": {
-      "loaded": 63,
-      "rendered": 59
+    {
+      "id": "airspace-061",
+      "type": "CTR",
+      "name": "MOKPO CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "D": {
-      "loaded": 55,
-      "rendered": 55
+    {
+      "id": "airspace-062",
+      "type": "CTR",
+      "name": "NONSAN CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "A": {
-      "loaded": 10,
-      "rendered": 8
+    {
+      "id": "airspace-063",
+      "type": "CTR",
+      "name": "OSAN CONTROL ZONE",
+      "operation": "DIFFERENCE"
     },
-    "CATA": {
-      "loaded": 9,
-      "rendered": 9
+    {
+      "id": "airspace-064",
+      "type": "CTR",
+      "name": "PYEONGTAEK CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "MOA": {
-      "loaded": 60,
-      "rendered": 57
+    {
+      "id": "airspace-067",
+      "type": "CTR",
+      "name": "SUWON CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "HTA": {
-      "loaded": 2,
-      "rendered": 2
+    {
+      "id": "airspace-068",
+      "type": "CTR",
+      "name": "YECHEON CONTROL ZONE",
+      "operation": "CIRCLE"
     },
-    "ACMI": {
-      "loaded": 5,
-      "rendered": 4
+    {
+      "id": "airspace-072",
+      "type": "P",
+      "name": "RK P73 SEOUL",
+      "operation": "CAPSULE_OUTER_ENVELOPE"
     },
-    "AAR": {
-      "loaded": 6,
-      "rendered": 6
+    {
+      "id": "airspace-099",
+      "type": "R",
+      "name": "RK R14 PYEONGDONG",
+      "operation": "POLYGON"
+    },
+    {
+      "id": "airspace-111",
+      "type": "R",
+      "name": "RK R155B SEONGJU",
+      "operation": "DIFFERENCE"
+    },
+    {
+      "id": "airspace-112",
+      "type": "R",
+      "name": "RK R157 JANGSAN",
+      "operation": "CIRCLE"
+    },
+    {
+      "id": "airspace-197",
+      "type": "A",
+      "name": "RK A810 HANAM",
+      "operation": "DIFFERENCE"
+    },
+    {
+      "id": "airspace-198",
+      "type": "A",
+      "name": "RK A811 BUCHEON",
+      "operation": "DIFFERENCE"
     }
-  },
-  "succeeded": 248,
+  ],
+  "rendered": 265,
   "failures": [
     {
       "id": "airspace-000",
@@ -106,60 +155,6 @@
       "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
     },
     {
-      "id": "airspace-056",
-      "type": "CTR",
-      "name": "GANGNEUNG CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-057",
-      "type": "CTR",
-      "name": "HAEMI CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-058",
-      "type": "CTR",
-      "name": "ICHEON CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-059",
-      "type": "CTR",
-      "name": "JINHAE CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-060",
-      "type": "CTR",
-      "name": "JUNGWON CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-061",
-      "type": "CTR",
-      "name": "MOKPO CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-062",
-      "type": "CTR",
-      "name": "NONSAN CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-063",
-      "type": "CTR",
-      "name": "OSAN CONTROL ZONE",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
-    },
-    {
-      "id": "airspace-064",
-      "type": "CTR",
-      "name": "PYEONGTAEK CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
       "id": "airspace-065",
       "type": "CTR",
       "name": "SEONGMU CONTROL ZONE",
@@ -170,18 +165,6 @@
       "type": "CTR",
       "name": "SOKCHO CONTROL ZONE",
       "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
-    },
-    {
-      "id": "airspace-067",
-      "type": "CTR",
-      "name": "SUWON CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
-    },
-    {
-      "id": "airspace-068",
-      "type": "CTR",
-      "name": "YECHEON CONTROL ZONE",
-      "reason": "원 크기의 radius/diameter 의미가 원문에 명시되지 않음"
     },
     {
       "id": "airspace-069",
@@ -202,46 +185,10 @@
       "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
     },
     {
-      "id": "airspace-072",
-      "type": "P",
-      "name": "RK P73 SEOUL",
-      "reason": "두 원의 연결 방식(합집합/접선 연결)이 명시되지 않음"
-    },
-    {
-      "id": "airspace-099",
-      "type": "R",
-      "name": "RK R14 PYEONGDONG",
-      "reason": "자기교차 경계: 순서 추정/보정하지 않음"
-    },
-    {
-      "id": "airspace-111",
-      "type": "R",
-      "name": "RK R155B SEONGJU",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
-    },
-    {
-      "id": "airspace-112",
-      "type": "R",
-      "name": "RK R157 JANGSAN",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
-    },
-    {
       "id": "airspace-132",
       "type": "R",
       "name": "RK R97D CHEOLMAE-D",
       "reason": "정의되지 않은 경계 지시문/누락된 좌표: alternatecoordinatesequencealsoshowninAIP"
-    },
-    {
-      "id": "airspace-197",
-      "type": "A",
-      "name": "RK A810 HANAM",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
-    },
-    {
-      "id": "airspace-198",
-      "type": "A",
-      "name": "RK A811 BUCHEON",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
     },
     {
       "id": "airspace-222",
