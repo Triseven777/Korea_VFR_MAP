@@ -1,0 +1,266 @@
+// Generated without interpretation from the supplied CSV geometry_spec.
+// Keep source, reason and status alongside the exact parsed specification.
+export const AIRSPACE_GEOMETRY_PATCH = [
+  {
+    "name": "GANGNEUNG CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "374514N 1285642E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "HAEMI CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "364216N 1262910E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "ICHEON CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "371204N 1272819E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "JINHAE CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "350841N 1284139E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "JUNGWON CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "370149N 1275309E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "MOKPO CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "344532N 1262252E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "NONSAN CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "361610N 1270650E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "PYEONGTAEK CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "365736N 1270200E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "SUWON CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "371422N 1270025E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "YECHEON CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_AUTO_FIX",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "363754N 1282118E",
+      "radius_nm": 5
+    },
+    "reason": "공식 ENR 2.1에 'A circle 5 NM radius centered at ...'로 명시. 기존 parser가 'radius' 없는 정규화 문자열을 오판한 문제.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "OSAN CONTROL ZONE",
+    "type": "CTR",
+    "status": "SAFE_WITH_BOOLEAN",
+    "geometry_spec": {
+      "op": "DIFFERENCE",
+      "base": {
+        "op": "CIRCLE",
+        "center": "370526N 1270147E",
+        "radius_nm": 5
+      },
+      "subtract": [
+        {
+          "op": "CIRCLE",
+          "center": "371422N 1270025E",
+          "radius_nm": 5,
+          "ref": "SUWON CONTROL ZONE"
+        }
+      ]
+    },
+    "reason": "공식 정의가 5 NM 원에서 Suwon CTR 중첩부를 제외하도록 명시. 두 원 모두 ENR 2.1에 명확히 정의.",
+    "source": "ROK eAIP ENR 2.1 (2025-08-06)"
+  },
+  {
+    "name": "RK P73 SEOUL",
+    "type": "P",
+    "status": "SAFE_SPECIAL_GEOMETRY",
+    "geometry_spec": {
+      "op": "CAPSULE_OUTER_ENVELOPE",
+      "centers": [
+        "373209N 1265838E",
+        "373232N 1265943E"
+      ],
+      "radius_nm": 2
+    },
+    "reason": "ENR 5.1은 두 2 NM 원의 outlines를 연결한 영역, ENR 1.2는 두 원 반경의 outside boundary를 감싸는 horizontal range로 설명. 두 동일 반경 원의 외곽 envelope로 구현.",
+    "source": "ROK eAIP ENR 1.2 / ENR 5.1"
+  },
+  {
+    "name": "RK R14 PYEONGDONG",
+    "type": "R",
+    "status": "SOURCE_DATA_CORRECTION",
+    "geometry_spec": {
+      "op": "POLYGON",
+      "points": [
+        "350900N 1264200E",
+        "350900N 1264400E",
+        "350816.62N 1264526.78E",
+        "350518.43N 1264346.35E",
+        "350600N 1264100E",
+        "350746N 1264117E",
+        "350806N 1264056E"
+      ]
+    },
+    "reason": "기존 DB는 구/신 경계가 섞여 자기교차. 2025-09-03 공식 AIP AMDT 8/25의 clean table 순서로 교정. 현재 2026-10-15 유효본 최종 재대조는 필요.",
+    "source": "ROK eAIP ENR 5.1 / official amendment material"
+  },
+  {
+    "name": "RK A810 HANAM",
+    "type": "A",
+    "status": "SAFE_WITH_BOOLEAN",
+    "geometry_spec": {
+      "op": "DIFFERENCE",
+      "base": {
+        "op": "CIRCLE",
+        "center": "373207N 1271049E",
+        "radius_nm": 2.5
+      },
+      "subtract": [
+        {
+          "op": "CIRCLE",
+          "center": "372645N 1270651E",
+          "radius_nm": 5,
+          "ref": "SEOUL CTR"
+        }
+      ]
+    },
+    "reason": "A810은 Seoul CTR 중첩부 제외. Seoul CTR은 RKSM AD 2.17에서 5 NM 원으로 확인.",
+    "source": "ROK eAIP AD 2.17"
+  },
+  {
+    "name": "RK A811 BUCHEON",
+    "type": "A",
+    "status": "SAFE_WITH_BOOLEAN",
+    "geometry_spec": {
+      "op": "DIFFERENCE",
+      "base": {
+        "op": "CIRCLE",
+        "center": "372835N 1264450E",
+        "radius_nm": 2
+      },
+      "subtract": [
+        {
+          "op": "CIRCLE",
+          "center": "373325N 1264751E",
+          "radius_nm": 5,
+          "ref": "GIMPO CTR"
+        }
+      ]
+    },
+    "reason": "A811은 Gimpo CTR 중첩부 제외. Gimpo CTR은 RKSS AD 2.17에서 ARP 중심 5 NM 원으로 확인.",
+    "source": "ROK eAIP AD 2.17"
+  },
+  {
+    "name": "RK R155B SEONGJU",
+    "type": "R",
+    "status": "SAFE_WITH_BOOLEAN_ARC",
+    "geometry_spec": {
+      "op": "DIFFERENCE",
+      "base": {
+        "op": "ARC_SEGMENT",
+        "start": "360118N 1281017E",
+        "center": "360243N 1281333E",
+        "radius_nm": 3,
+        "direction": "CW",
+        "end": "360408N 1281649E",
+        "close_with": "STRAIGHT_CHORD"
+      },
+      "subtract": [
+        {
+          "op": "CIRCLE",
+          "center": "360243N 1281333E",
+          "radius_nm": 1.5,
+          "ref": "RK R155A"
+        }
+      ]
+    },
+    "reason": "2026 ENR 5.1에 clockwise 3 NM arc와 R155A 제외가 명시되어 있어 구조적으로 계산 가능.",
+    "source": "ROK eAIP ENR 5.1 / official amendment material"
+  },
+  {
+    "name": "RK R157 JANGSAN",
+    "type": "R",
+    "status": "SAFE_AS_CIRCLE_PENDING_TEXT_CLEANUP",
+    "geometry_spec": {
+      "op": "CIRCLE",
+      "center": "351202N 1290903E",
+      "radius_nm": 0.7
+    },
+    "reason": "2026 ENR 5.1 검색결과에 'excluding R155A' 문구가 붙지만 R155A 중심과 약 67.9 NM 떨어져 실제 중첩이 없음. geometry 자체는 0.7 NM 원으로 공식 명시. 문구는 clean-current page 재검증 권장.",
+    "source": "ROK eAIP ENR 5.1 / official amendment material"
+  }
+];
