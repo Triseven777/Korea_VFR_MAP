@@ -1,5 +1,5 @@
 import {AirspaceRepository} from '../data/airspace-repository.mjs';
-import {buildAirspaceGeoJson} from '../domain/airspace-geometry.mjs';
+import {buildAirspaceGeoJsonWithOverrides as buildAirspaceGeoJson} from '../domain/airspace-geometry-overrides.mjs';
 export const AIRSPACE_ORDER=['FIR','CTA','ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','D','R','P'];
 export const AIRSPACE_STYLE={
  FIR:{color:'#AEB6C0',width:2.5,opacity:0,labelZoom:4},CTA:{color:'#8F9AA8',width:1.5,dash:[6,3],opacity:0,labelZoom:5},
