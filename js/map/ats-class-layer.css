@@ -1,0 +1,5 @@
+/* ATS-only test control. Existing popup classes/tokens are reused without edits. */
+#atsClassControl {position:fixed;left:12px;bottom:130px;z-index:55;max-width:calc(100vw - 130px);font:12px Arial;color:#f5f7fa;}
+#atsClassToggle {min-width:44px;min-height:44px;padding:8px 12px;background:var(--panel-bg,rgba(12,18,28,.92));border:1px solid rgba(255,255,255,.28);border-radius:12px;color:white;font:700 12px Arial;}
+#atsClassToggle[aria-pressed="true"] {color:var(--accent-blue,#4DA3FF);border-color:var(--accent-blue,#4DA3FF);}
+#atsClassStatus {display:block;background:var(--panel-bg,rgba(12,18,28,.92));padding:5px 8px;border-radius:6px;font-size:11px;}
