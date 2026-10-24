@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.20</title>
+  <title>KoreaVFR_v2.21</title>
+  <link rel="stylesheet" href="./js/map/ats-class-layer.css" />
 
   <link
     href="https://unpkg.com/maplibre-gl@6.13.0/dist/maplibre-gl.css"
@@ -1095,9 +1096,10 @@
 
 <body>
   <div id="map"></div>
+  <div id="atsClassControl"><button id="atsClassToggle" type="button" aria-pressed="true">ATS CLASS ON</button><span id="atsClassStatus">B/C/D · 로드 중</span></div>
   <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.20 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.21 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1215,6 +1217,7 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { createAtsClassLayer } from "./js/map/ats-class-layer.mjs";
   import { createAirspaceLayer } from "./js/map/airspace-layer.mjs";
   import { confirmAction } from "./js/ui-confirm.mjs";
   import { mountMeasureDistance } from "./js/measure-distance-ui.mjs";
@@ -4691,7 +4694,7 @@
       terrainReady = true;
 
       ensureRouteLayers();
-      void airspaceLayer.initialize().catch(()=>{});
+      void airspaceLayer.initialize().then(()=>atsClassLayer.initialize(),()=>atsClassLayer.initialize()).catch(()=>{});
       ensureCustomFixLayers();
       try{
         const records=await waypointRepository.getAllCustomWaypoints();
@@ -5463,7 +5466,8 @@
         surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
     }
     const measureTool = mountMeasureDistance({map,maplibregl});
-    const airspaceLayer=createAirspaceLayer({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)});
+    const airspaceLayer=createAirspaceLayer({map,maplibregl,canInspect:(event)=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)&&!atsClassLayer.claimsClick(event)});
+    const atsClassLayer=createAtsClassLayer({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)});
     const positionReport = mountPositionReport({
       getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
       getReferences: () => [
@@ -5477,6 +5481,7 @@
       map,
       customWaypointRepository: waypointRepository,
       airspaceLayer,
+      atsClassLayer,
 
       getRoute() {
         return JSON.parse(JSON.stringify(route));
