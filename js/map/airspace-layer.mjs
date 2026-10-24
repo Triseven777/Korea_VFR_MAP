@@ -1,5 +1,5 @@
 import {AirspaceRepository} from '../data/airspace-repository.mjs';
-import {buildAirspaceGeoJsonWithOverrides as buildAirspaceGeoJson} from '../domain/airspace-geometry-overrides.mjs';
+import {prepareAirspaceReferences,convertAirspacesV22} from '../data/airspace-conversion-v22.mjs';
 export const AIRSPACE_ORDER=['FIR','CTA','ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','D','R','P'];
 export const AIRSPACE_STYLE={
  FIR:{color:'#AEB6C0',width:2.5,opacity:0,labelZoom:4},CTA:{color:'#8F9AA8',width:1.5,dash:[6,3],opacity:0,labelZoom:5},
@@ -17,7 +17,7 @@ export function createAirspaceLayer({map,maplibregl,canInspect=()=>true,reposito
  async function initialize(){
   if(pending)return pending;
   pending=(async()=>{
-   await repository.load();const rows=repository.getAll();converted=buildAirspaceGeoJson(rows);
+   await repository.load();const rows=repository.getAll();converted=convertAirspacesV22(rows,await prepareAirspaceReferences());
    // Explicitly preserve raw altitude strings: no unit conversion or formatting.
    for(const feature of converted.geojson.features){
     const p=feature.properties;p.label=`${p.name}\n${p.lower_limit_raw??'UNKNOWN'} – ${p.upper_limit_raw??'UNKNOWN'}`;
@@ -52,9 +52,10 @@ export function createAirspaceLayer({map,maplibregl,canInspect=()=>true,reposito
   if(!hits.length)return;
   hits.sort((a,b)=>AIRSPACE_ORDER.indexOf(b.properties.type)-AIRSPACE_ORDER.indexOf(a.properties.type));
   const p=hits[0].properties,record=repository.getById(p.id);if(!record)return;
+  const active=converted.geojson.features.find(f=>f.id===p.id)?.properties??record;
   popup?.remove();const root=document.createElement('section');root.className='airspace-popup-body';
   const title=document.createElement('h2');title.textContent=record.name;root.appendChild(title);
-  for(const [key,value] of [['Type',record.type],['Upper Limit',record.upper_limit_raw],['Lower Limit',record.lower_limit_raw],['Remarks',record.remarks]]){
+  for(const [key,value] of [['Type',record.type],['Upper Limit',active.upper_limit_raw],['Lower Limit',active.lower_limit_raw],['Remarks',record.remarks]]){
    const row=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');row.className='airspace-detail-row';label.textContent=key;text.textContent=value==null||value===''?'—':String(value);row.append(label,text);root.appendChild(row);
   }
   const metadata=document.createElement('small');metadata.textContent=`Source: ${record.source??'UNKNOWN'}\nDB basis: ${record.current_issue_effective_date??'2026-10-15'}\nSource effective: ${record.source_effective_date??'UNKNOWN'}\n※ DB active는 실시간 공역 활성/비활성 판정이 아닙니다.`;root.appendChild(metadata);
