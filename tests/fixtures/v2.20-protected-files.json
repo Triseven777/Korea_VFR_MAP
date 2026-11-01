@@ -1,0 +1,33 @@
+{
+  "index_sha256": "31b9aa2995e27215daedcadbe098453631c377fa86b8b2172cf637c365f59c29",
+  "files": {
+    "js/ui-tokens.css": "20c16759eea97497f5ac91b7a530790661db4654921098fc0ebb70eaea2e268f",
+    "js/measure-distance.mjs": "7b97f5ee545136c0e3e6678a0cfbffbedbd3772837b3bcf54c18725f6afcfc46",
+    "js/position-report.mjs": "93448f8a1a09dbfb7fc74c9a0b64f7810a29eed8f2b5de1bae6a4a5ca1b2578d",
+    "js/ui-confirm.mjs": "5e3be05142b5c4dc8029b3ae392a5740d0fcc8694d034e2b81fcb94eb6c1b9aa",
+    "js/position-report-ui.mjs": "df31d646396e8495d4ac336657d2d30716f5d9a2c2dda5a2295784572174a82a",
+    "js/pressure-tool.mjs": "1ed767da013625946952b0aad51b9c7bca097658bea285648955e159d59f02b4",
+    "js/pressure-converter.mjs": "ee13ef7ecd194a6c7e38f7719f24ffc4b174d9ecd5ea07326f6b820f421f9102",
+    "js/measure-distance-ui.mjs": "22a039f10ce6cabcbb4c148168fbbb0925ddc2d61fa2cdc1ebb9093d0884abe2",
+    "data/airspace-conversion-report.json": "25393b297cc83b1206f5ab06165f83b9fd4a7da86ba18629d40cfbaa3024191f",
+    "data/airspaces.json": "a27755782dc04bfc70075792629aba60ed2dd5e5c43b549fddb9abac24f9933e",
+    "data/airspace-geometry-patch-source.csv": "d5bcfe7e420c5670ce437895ac0b0be56d7ec5744ab7f3334c3fc4648913d595",
+    "data/airspace-geometry-overrides.json": "d3ce7680921f17634635c77142c833afedfc2652352aaba7aa2b6b18a4f9b470",
+    "assets/airport_other_yellow.png": "5c9212f21f5f010ddacdc0f67bcd8c5c668ef0d288190ccbfae1b4cc5899ff12",
+    "assets/airport_civil_blue.png": "f381430d624fbedd5ebbfcbf87ee2fb675ad9d5994d15714359aaf31e85a89b1",
+    "assets/airport_military_green.png": "c62e9af3c3bb56d266c72e3f9b03058d170c7fd6f229063f4f102e2c498b3272",
+    "js/domain/airspace-geometry.mjs": "dac4b7ebd230a92c51f79c5a5a7a81ea6c4fa9d64caced2af0d1cea0d654e01b",
+    "js/domain/airspace-geometry-overrides.mjs": "8f2d7122218221ac93856253abebe2ce11d220fee5dfb06b29f78492849b4d27",
+    "js/vendor/polygon-clipping.mjs": "648654a043d0f087cb82c2883fa0a58b08ea4875220de13ccd72270d48d345f0",
+    "js/vendor/polygon-clipping-LICENSE.md": "864ae9e4ed75e1571a3bcf5dc9070264213445b32e7e2af5bf60eba46fb656d0",
+    "js/vendor/README.md": "588f9c55cd48d8f32180ed3d6bac4c702fc9b9493fad9684f2bad1fbda48dd40",
+    "js/services/indexed-db-service.mjs": "0fcea2b3400c0201a3f3a0b4dcaf9d5d73060f1e6ccc3ddf384b15285ac4f036",
+    "js/models/custom-waypoint.mjs": "65b9cb03bf974682be351eab86808839d7a5c75fa6ffdd19e1529c23d7783243",
+    "js/data/airspace-repository.mjs": "db5b20d47b5980c869a8c98f18f5860f2c19d94024fcb03ae45bc8e6dfb6f34e",
+    "js/data/custom-waypoint-repository.mjs": "59b8f28c149c186eed3c0206fd123ae98c79aab3b0098f22be2d3de19de898ed",
+    "js/data/airspace-geometry-patch.mjs": "6b84bcc423de886fec281ac50c414934ed59406ad3220a79d137baaf74ca3796",
+    "data/fonts/FONT-LICENSE.txt": "63d3ba759d12804c5b31a9d5940d855c1820d1f5999e6b0872eb1c7ff045fbc9",
+    "data/fonts/AirspaceSans/8192-8447.pbf": "15e34aade71f8d2b0a3d73114a644e82eb15a1276f8bfa9888c597cffd923d33",
+    "data/fonts/AirspaceSans/0-255.pbf": "e2f10d480866772012bb5a21d1de65600962b4b37f92a5931a1885f19e2c3a33"
+  }
+}

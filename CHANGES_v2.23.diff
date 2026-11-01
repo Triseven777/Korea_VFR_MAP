@@ -1,0 +1,1066 @@
+--- v2.22/index.html
++++ v2.23/index.html
+@@ -3,7 +3,8 @@
+ <head>
+   <meta charset="utf-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+-  <title>KoreaVFR_v2.22</title>
++  <title>KoreaVFR_v2.23</title>
++  <link rel="stylesheet" href="./js/map/airspace-interaction.css" />
+   <link rel="stylesheet" href="./js/map/ats-class-layer.css" />
+ 
+   <link
+@@ -1099,7 +1100,7 @@
+   <div id="atsClassControl"><button id="atsClassToggle" type="button" aria-pressed="true">ATS CLASS ON</button><span id="atsClassStatus">B/C/D · 로드 중</span></div>
+   <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
+   <div id="runtimeStatusBanner"></div>
+-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.22 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
++  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.23 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+ 
+   <div id="routeInfoShell" class="route-info-shell hidden">
+     <div class="route-info-panel">
+@@ -1217,6 +1218,7 @@
+       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
+     </section>
+     <script type="module">
++  import { createAirspaceInteraction } from "./js/map/airspace-interaction.mjs";
+   import { createAtsClassLayer } from "./js/map/ats-class-layer.mjs";
+   import { createAirspaceLayer } from "./js/map/airspace-layer.mjs";
+   import { confirmAction } from "./js/ui-confirm.mjs";
+@@ -5466,8 +5468,9 @@
+         surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
+     }
+     const measureTool = mountMeasureDistance({map,maplibregl});
+-    const airspaceLayer=createAirspaceLayer({map,maplibregl,canInspect:(event)=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)&&!atsClassLayer.claimsClick(event)});
+-    const atsClassLayer=createAtsClassLayer({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2)});
++    const airspaceInteraction=createAirspaceInteraction({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2),adapters:{terrain:terrainElevationMeters,mercator:mercatorData,matrix:extractProjectionMatrix,linkProgram:linkRoute3DProgram}});
++    const airspaceLayer=createAirspaceLayer({map,maplibregl,interaction:airspaceInteraction});
++    const atsClassLayer=createAtsClassLayer({map,maplibregl,interaction:airspaceInteraction});
+     const positionReport = mountPositionReport({
+       getPosition: () => ({latitude:aircraft.latitude,longitude:aircraft.longitude}),
+       getReferences: () => [
+@@ -5482,6 +5485,7 @@
+       customWaypointRepository: waypointRepository,
+       airspaceLayer,
+       atsClassLayer,
++      airspaceInteraction,
+ 
+       getRoute() {
+         return JSON.parse(JSON.stringify(route));
+--- v2.22/js/map/airspace-layer.mjs
++++ v2.23/js/map/airspace-layer.mjs
+@@ -1,18 +1,19 @@
++import {VISUAL_STYLE,visualStyle,selectedOpacity} from './airspace-visual-style.mjs';
+ import {AirspaceRepository} from '../data/airspace-repository.mjs';
+ import {prepareAirspaceReferences,convertAirspacesV22} from '../data/airspace-conversion-v22.mjs';
+ export const AIRSPACE_ORDER=['FIR','CTA','ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','D','R','P'];
+ export const AIRSPACE_STYLE={
+  FIR:{color:'#AEB6C0',width:2.5,opacity:0,labelZoom:4},CTA:{color:'#8F9AA8',width:1.5,dash:[6,3],opacity:0,labelZoom:5},
+- TMA:{color:'#FF4D5A',width:2,opacity:.04,labelZoom:6},CTR:{color:'#4DA3FF',width:2,opacity:.05,labelZoom:7},
+- P:{color:'#FF303D',width:2.5,opacity:.12,labelZoom:7},R:{color:'#36B66A',width:2,opacity:.08,labelZoom:7},D:{color:'#29C7D8',width:2,opacity:.08,labelZoom:7},
++ TMA:{lineColor:VISUAL_STYLE.tmaLine,color:'#FF4D5A',width:2,opacity:.04,labelZoom:6},CTR:{color:'#4DA3FF',width:2,opacity:.05,labelZoom:7},
++ P:{color:VISUAL_STYLE.restricted.color,width:2.5,opacity:VISUAL_STYLE.restricted.fill,labelZoom:7},R:{color:VISUAL_STYLE.restricted.color,width:2,opacity:VISUAL_STYLE.restricted.fill,labelZoom:7},D:{color:'#29C7D8',width:2,opacity:.08,labelZoom:7},
+  A:{color:'#D99A42',width:1.8,opacity:.07,labelZoom:8},CATA:{color:'#4D8DFF',width:1.8,dash:[3,2],opacity:.06,labelZoom:8},
+  MOA:{color:'#D565C7',width:1.8,dash:[6,3],opacity:.06,labelZoom:8},HTA:{color:'#D565C7',width:1.6,dash:[2,2],opacity:.05,labelZoom:10},
+  ACMI:{color:'#A0A5AD',width:1.6,dash:[5,3],opacity:.05,labelZoom:10},AAR:{color:'#63B86D',width:1.6,dash:[8,4],opacity:.04,labelZoom:10}
+ };
+-export function createAirspaceLayer({map,maplibregl,canInspect=()=>true,repository=new AirspaceRepository()}){
++export function createAirspaceLayer({map,maplibregl,canInspect=()=>true,repository=new AirspaceRepository(),interaction=null}){
+  let visible=true,initialized=false,pending=null,converted=null,popup=null;const ids=[],hitLayers=[];
+  const toggle=document.getElementById('airspaceToggle'),status=document.getElementById('airspaceStatus');
+- function setVisible(on){visible=on;for(const id of ids)if(map.getLayer(id))map.setLayoutProperty(id,'visibility',on?'visible':'none');if(!on)popup?.remove();toggle.textContent=`AIRSPACE ${on?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(on));}
++ function setVisible(on){visible=on;for(const id of ids)if(map.getLayer(id))map.setLayoutProperty(id,'visibility',on?'visible':'none');if(!on)popup?.remove();interaction?.visibilityChanged();toggle.textContent=`AIRSPACE ${on?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(on));}
+  toggle.addEventListener('click',()=>setVisible(!visible));
+  async function initialize(){
+   if(pending)return pending;
+@@ -28,8 +29,8 @@
+    const before=map.getLayer('route-line')?'route-line':undefined;
+    for(const type of AIRSPACE_ORDER){
+     const s=AIRSPACE_STYLE[type],filter=['==',['get','type'],type];
+-    if(s.opacity){const id=`airspace-${type}-fill`;map.addLayer({id,type:'fill',source:'airspace-source',filter,paint:{'fill-color':s.color,'fill-opacity':s.opacity,'fill-antialias':true}},before);ids.push(id);hitLayers.push(id);}
+-    const id=`airspace-${type}-line`;const paint={'line-color':s.color,'line-width':s.width,'line-opacity':1};if(s.dash)paint['line-dasharray']=s.dash;
++    if(s.opacity){const id=`airspace-${type}-fill`;map.addLayer({id,type:'fill',source:'airspace-source',filter,paint:{'fill-color':s.color,'fill-opacity':selectedOpacity(s.opacity,visualStyle('airspace',type)?.selectedFill??Math.min(.4,s.opacity+.15)),'fill-antialias':true}},before);ids.push(id);hitLayers.push(id);}
++    const id=`airspace-${type}-line`;const paint={'line-color':s.lineColor??s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(1,1)};if(s.dash)paint['line-dasharray']=s.dash;
+     map.addLayer({id,type:'line',source:'airspace-source',filter,paint,layout:{'line-join':'round','line-cap':'butt'}},before);ids.push(id);hitLayers.push(id);
+    }
+    // One symbol layer gives collision priority consistently across all types.
+@@ -40,7 +41,7 @@
+    const missing=AIRSPACE_ORDER.filter(t=>rows.some(r=>r.type===t)&&!converted.geojson.features.some(f=>f.properties.type===t));
+    status.textContent=`2026-10-15 DB · ${converted.geojson.features.length}/${rows.length} 표시 · ${converted.failures.length} 제외`+(missing.length?` · ${missing.join('/')} 미표시`:'');
+    status.title=converted.failures.map(f=>`${f.id} ${f.name}: ${f.reason}`).join('\n');
+-   map.on('click',inspect);
++   if(interaction)interaction.register({kind:'airspace',features:converted.geojson.features,source:'airspace-source',isVisible:()=>visible,repository});else map.on('click',inspect);
+    return getStatus();
+   })().catch(error=>{pending=null;status.textContent='공역 DB/레이어 로드 실패';console.error('[Airspace]',error);throw error;});return pending;
+  }
+--- v2.22/js/map/ats-class-layer.mjs
++++ v2.23/js/map/ats-class-layer.mjs
+@@ -1,14 +1,15 @@
++import {VISUAL_STYLE,selectedOpacity} from './airspace-visual-style.mjs';
+ import {AtsClassRepository} from '../data/ats-class-repository.mjs';
+ import {buildAtsClassGeoJson} from '../domain/ats-class-geometry.mjs';
+-export const ATS_CLASS_STYLE=Object.freeze({color:'#7C76A8',width:2,opacity:.85,fillOpacity:.04});
++export const ATS_CLASS_STYLE=Object.freeze({color:VISUAL_STYLE.class.color,width:2,opacity:VISUAL_STYLE.class.line,fillOpacity:VISUAL_STYLE.class.fill});
+ const SHAPE_IDS=['ats-class-fill','ats-class-line'],LABEL_ID='ats-class-labels';
+-export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,repository=new AtsClassRepository()}){
++export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,repository=new AtsClassRepository(),interaction=null}){
+  let visible=true,initialized=false,pending=null,converted=null,popup=null;
+  const toggle=document.getElementById('atsClassToggle'),status=document.getElementById('atsClassStatus');
+  function setVisible(on){
+   visible=Boolean(on);
+   for(const id of [...SHAPE_IDS,LABEL_ID])if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
+-  if(!visible)popup?.remove();toggle.textContent=`ATS CLASS ${visible?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(visible));
++  if(!visible)popup?.remove();interaction?.visibilityChanged();toggle.textContent=`ATS CLASS ${visible?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(visible));
+  }
+  toggle.addEventListener('click',()=>setVisible(!visible));
+  async function initialize(){
+@@ -18,18 +19,18 @@
+    map.addSource('ats-class-source',{type:'geojson',data:converted.geojson});
+    map.addSource('ats-class-label-source',{type:'geojson',data:converted.labels});
+    // Insert only the new layers. Do not move/rewrite any existing airspace layer.
+-   const before=['ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','D','R','P'].flatMap(t=>[`airspace-${t}-fill`,`airspace-${t}-line`]).find(id=>map.getLayer(id))??(map.getLayer('route-line')?'route-line':undefined);
++   const before=['D','R','P'].flatMap(t=>[`airspace-${t}-fill`,`airspace-${t}-line`]).find(id=>map.getLayer(id))??(map.getLayer('route-line')?'route-line':undefined);
+    const s=ATS_CLASS_STYLE;
+-   map.addLayer({id:SHAPE_IDS[0],type:'fill',source:'ats-class-source',paint:{'fill-color':s.color,'fill-opacity':s.fillOpacity,'fill-antialias':true}},before);
+-   map.addLayer({id:SHAPE_IDS[1],type:'line',source:'ats-class-source',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':s.color,'line-width':s.width,'line-opacity':s.opacity}},before);
++   map.addLayer({id:SHAPE_IDS[0],type:'fill',source:'ats-class-source',paint:{'fill-color':s.color,'fill-opacity':selectedOpacity(s.fillOpacity,VISUAL_STYLE.class.selectedFill),'fill-antialias':true}},before);
++   map.addLayer({id:SHAPE_IDS[1],type:'line',source:'ats-class-source',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(s.opacity,VISUAL_STYLE.class.selectedLine)}},before);
+    map.addLayer({id:LABEL_ID,type:'symbol',source:'ats-class-label-source',minzoom:6,
+-    filter:['step',['zoom'],['==',['get','class'],'B'],7,['in',['get','class'],['literal',['B','C']]],8,true],
++    filter:['step',['zoom'],['in',['get','class'],['literal',['A','B']]],7,['in',['get','class'],['literal',['A','B','C']]],8,true],
+     layout:{'symbol-placement':'point','text-field':['get','label'],'text-font':['AirspaceSans'],'text-size':['interpolate',['linear'],['zoom'],6,12,11,14,14,15],'text-line-height':1.25,'text-max-width':20,'text-padding':7,'text-allow-overlap':false,'text-ignore-placement':false,'symbol-sort-key':['match',['get','class'],'B',0,'C',1,2]},
+     paint:{'text-color':s.color,'text-halo-color':'rgba(8,12,18,0.98)','text-halo-width':2}},map.getLayer('route-line')?'route-line':undefined);
+    initialized=true;setVisible(visible);
+    status.textContent=`B/C/D · ${converted.geojson.features.length} 표시 · ${converted.failures.length} 제외`;
+    status.title=converted.failures.map(f=>`${f.name} / ${f.class} / ${f.geometry_type}: ${f.reason}`).join('\n');
+-   map.on('click',inspect);return getStatus();
++   if(interaction)interaction.register({kind:'ats',features:converted.geojson.features,source:'ats-class-source',isVisible:()=>visible,repository});else map.on('click',inspect);return getStatus();
+   })().catch(error=>{pending=null;status.textContent='ATS Class 로드 실패';console.error('[ATS Class]',error);throw error;});return pending;
+  }
+  function isBlocked(event){
+@@ -54,8 +55,8 @@
+   if(!selected.length)return;
+   const record=repository.getById(selected[0].properties.id);if(!record)return;
+   popup?.remove();const root=document.createElement('section');root.className='airspace-popup-body';
+-  const title=document.createElement('h2');title.textContent=`CLASS ${record.class}`;root.appendChild(title);
+-  for(const [key,value] of [['Name',record.name],['ICAO',record.icao],['Lower Limit',record.lower_limit_raw],['Upper Limit',record.upper_limit_raw]]){
++  const title=document.createElement('h2');title.textContent=record.name;root.appendChild(title);
++  for(const [key,value] of [['Type',record.class],['ICAO',record.icao],['Lower Limit',record.lower_limit_raw],['Upper Limit',record.upper_limit_raw]]){
+    const row=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');row.className='airspace-detail-row';label.textContent=key;text.textContent=value??'—';row.append(label,text);root.appendChild(row);
+   }
+   const metadata=document.createElement('small');metadata.textContent=`${record.source_section??''}\nSource effective: ${record.source_effective_date??'UNKNOWN'}\n${record.validation_status??''}`;root.appendChild(metadata);
+--- v2.22/js/data/ats-class-repository.mjs
++++ v2.23/js/data/ats-class-repository.mjs
+@@ -1,4 +1,4 @@
+-export const ATS_VISIBLE_CLASSES=Object.freeze(['B','C','D']);
++export const ATS_VISIBLE_CLASSES=Object.freeze(['A','B','C','D']);
+ export function isAtsMapVolume(record){return record.record_type==='ATS_CLASS_VOLUME'&&ATS_VISIBLE_CLASSES.includes(record.class);}
+ export const atsRecordId=(record,index)=>String(record.id??`ats-class-${String(index).padStart(3,'0')}`);
+ export class AtsClassRepository {
+--- v2.22/js/map/airspace-visual-style.mjs
++++ v2.23/js/map/airspace-visual-style.mjs
+@@ -0,0 +1,9 @@
++// CTR's existing palette value; Alert (airspace type A) is not ATS Class A.
++export const CTR_COLOR='#4DA3FF',PROHIBITED_COLOR='#FF303D';
++export const VISUAL_STYLE=Object.freeze({
++ class:{color:CTR_COLOR,line:.95,fill:.12,selectedLine:1,selectedFill:.28,wall:.22,cap:.13,selectedWall:.42,selectedCap:.30},
++ restricted:{color:PROHIBITED_COLOR,line:1,fill:.20,selectedLine:1,selectedFill:.40,wall:.26,cap:.16,selectedWall:.48,selectedCap:.34},
++ tmaLine:'#A95B4B',shadow:.30,topPitch:5
++});
++export function visualStyle(kind,type){return kind==='ats'?VISUAL_STYLE.class:['P','R'].includes(type)?VISUAL_STYLE.restricted:null;}
++export const selectedOpacity=(normal,selected)=>['case',['boolean',['feature-state','selected'],false],selected,normal];
+--- v2.22/js/map/airspace-interaction.mjs
++++ v2.23/js/map/airspace-interaction.mjs
+@@ -0,0 +1,69 @@
++import {geometryContains} from '../domain/airspace-visual-geometry.mjs';
++import {createAirspaceVolumes} from './airspace-volume-layer.mjs';
++import {VISUAL_STYLE} from './airspace-visual-style.mjs';
++export function createAirspaceInteraction({map,maplibregl,canInspect=()=>true,adapters}){
++ const entries=new Map(),groups=new Map();let selectedKey=null,popup=null,anchor=null;
++ const volumes=createAirspaceVolumes({map,adapters,onFloating:(entry,floating)=>map.setFeatureState({source:entry.source,id:entry.feature.id},{floating})});
++ function state(entry,selected){if(map.getSource(entry.source))map.setFeatureState({source:entry.source,id:entry.feature.id},{selected});}
++ function clear(){const previous=entries.get(selectedKey);if(previous)state(previous,false);selectedKey=null;const old=popup;popup=null;old?.remove();map.triggerRepaint();}
++ function closePopup(){const old=popup;popup=null;old?.remove();}
++ function open(root,className=''){
++  const pixel=map.project?.(anchor),canvas=map.getCanvas?.();
++  let popupAnchor;
++  if(pixel&&canvas?.clientHeight){const bottom=pixel.y>canvas.clientHeight/2;popupAnchor=(bottom?'bottom':'top')+(pixel.x<230?'-left':pixel.x>canvas.clientWidth-230?'-right':'');if(root.style)root.style.maxHeight=`${Math.max(100,Math.min(canvas.clientHeight*.60,(bottom?pixel.y:canvas.clientHeight-pixel.y)-90))}px`;}
++  const instance=new maplibregl.Popup({anchor:popupAnchor,className:`airspace-popup ${className}`.trim(),maxWidth:'460px',closeOnClick:false,closeButton:true,offset:10}).setLngLat(anchor).setDOMContent(root).addTo(map);popup=instance;
++  instance.on('close',()=>{if(popup===instance)clear();});
++  for(const type of ['click','pointerdown','touchstart','touchend','wheel'])root.addEventListener(type,e=>e.stopPropagation(),{passive:true});return instance;
++ }
++ function select(key,location=anchor){
++  const entry=entries.get(key);if(!entry||!entry.isVisible())return false;
++  const previous=entries.get(selectedKey);if(previous)state(previous,false);closePopup();selectedKey=key;anchor=location;state(entry,true);
++  const p=entry.feature.properties,raw=entry.raw,root=document.createElement('section');root.className='airspace-popup-body';
++  const h=document.createElement('h2');h.textContent=p.name;root.appendChild(h);
++  const details=[['Type',entry.kind==='ats'?p.class:p.type],...(p.icao?[['ICAO',p.icao]]:[]),['Upper Limit',p.upper_limit_raw],['Lower Limit',p.lower_limit_raw],['Remarks',p.remarks??p.notes]];
++  for(const [key,value]of details){const row=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');row.className='airspace-detail-row';label.textContent=key;text.textContent=value==null||value===''?'—':String(value);row.append(label,text);root.appendChild(row);}
++  const metadata=document.createElement('small');metadata.textContent=`Source: ${p.source??p.source_section??'UNKNOWN'}\nSource effective: ${p.source_effective_date??'UNKNOWN'}\n${p.validation_status??''}`;root.appendChild(metadata);
++  const original=document.createElement('details'),summary=document.createElement('summary'),pre=document.createElement('pre');summary.textContent='Raw / Source metadata';pre.textContent=JSON.stringify(raw,null,2);original.append(summary,pre);root.appendChild(original);
++  open(root,entry.kind==='ats'?'ats-class-popup':'');map.triggerRepaint();return true;
++ }
++ const priority=e=>({P:0,R:1,D:2,CTR:5,TMA:6}[e.feature.properties.type]??(e.kind==='ats'?3:8));
++ function candidatesAt(lngLat,screenPoint){
++  const picked=new Set(screenPoint?volumes.screenHits(screenPoint):[]),point=[lngLat.lng,lngLat.lat];
++  return [...entries.values()].filter(e=>e.isVisible()&&(picked.has(e.key)||geometryContains(e.feature.geometry,point))).sort((a,b)=>priority(a)-priority(b)||a.feature.properties.name.localeCompare(b.feature.properties.name)||a.key.localeCompare(b.key));
++ }
++ function showCandidates(candidates){
++  closePopup();const root=document.createElement('section');root.className='airspace-popup-body airspace-choice';root.setAttribute('role','dialog');root.setAttribute('aria-label','중첩 공역 선택');
++  const h=document.createElement('h2');h.textContent='공역 선택';root.appendChild(h);
++  const head=document.createElement('div');head.className='airspace-choice-row airspace-choice-head';for(const text of ['Name','Type']){const span=document.createElement('span');span.textContent=text;head.appendChild(span);}root.appendChild(head);
++  for(const entry of candidates){const button=document.createElement('button');button.type='button';button.className='airspace-choice-row';button.dataset.key=entry.key;
++   for(const text of [entry.feature.properties.name,entry.kind==='ats'?`Class ${entry.feature.properties.class}`:entry.feature.properties.type]){const span=document.createElement('span');span.textContent=text;button.appendChild(span);}button.addEventListener('click',()=>select(entry.key));root.appendChild(button);
++  }
++  open(root,'airspace-choice-popup');
++ }
++ function inspect(event){
++  if(!canInspect(event)||event.originalEvent?.target?.closest?.('.maplibregl-marker,.ui-confirm-backdrop'))return;
++  if(map.getLayer('route-hit')&&map.queryRenderedFeatures(event.point,{layers:['route-hit']}).length)return;
++  const candidates=candidatesAt(event.lngLat,event.point);clear();anchor=event.lngLat;
++  if(candidates.length===1)select(candidates[0].key);else if(candidates.length>1)showCandidates(candidates);
++ }
++ function reorder(){
++  if(!map.moveLayer||!map.getStyle)return;
++  const all=map.getStyle().layers.map(l=>l.id),before=map.getLayer('route-line')?'route-line':undefined;
++  // Every fill goes below every boundary. Class boundary above CTR, P/R above classes.
++  const order=['FIR','CTA','ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','ATS','D','R','P'];
++  for(const suffix of ['shadow','fill','line'])for(const type of order){const id=type==='ATS'?`ats-class-${suffix}`:`airspace-${type}-${suffix}`;if(all.includes(id))map.moveLayer(id,before);}
++  if(map.getLayer('airspace-volumes-3d'))map.moveLayer('airspace-volumes-3d',before);
++  for(const id of ['airspace-labels','ats-class-labels'])if(map.getLayer(id))map.moveLayer(id,before);
++ }
++ function updateShadows(){for(const [kind,group]of groups){const id=kind==='ats'?'ats-class-shadow':'airspace-volume-shadow';if(map.getLayer(id))map.setLayoutProperty(id,'visibility',group.isVisible()&&map.getPitch()>VISUAL_STYLE.topPitch?'visible':'none');}}
++ function register({kind,features,source,isVisible,repository}){
++  groups.set(kind,{source,isVisible});const added=[];
++  for(const feature of features){const key=`${kind}:${feature.id}`;if(entries.has(key))continue;const entry={key,kind,feature,source,isVisible,raw:repository.getById(feature.id),isSelected:()=>selectedKey===key};entries.set(key,entry);added.push(entry);}
++  const id=kind==='ats'?'ats-class-shadow':'airspace-volume-shadow';
++  if(!map.getLayer(id))map.addLayer({id,type:'fill',source,filter:kind==='ats'?['in',['get','class'],['literal',['B','C','D']]]:['in',['get','type'],['literal',['P','R']]],paint:{'fill-color':'#000000','fill-opacity':['case',['boolean',['feature-state','floating'],false],VISUAL_STYLE.shadow,0]}},map.getLayer('route-line')?'route-line':undefined);
++  volumes.add(added);reorder();updateShadows();
++ }
++ function visibilityChanged(){const entry=entries.get(selectedKey);if(entry&&!entry.isVisible())clear();else if(popup&&!selectedKey)clear();updateShadows();volumes.invalidate();}
++ map.on('click',inspect);map.on('pitch',updateShadows);
++ return {register,visibilityChanged,clear,select,candidatesAt,getSelected:()=>selectedKey,get3DStatus:volumes.getStatus,getDiagnostics:volumes.getDiagnostics};
++}
+--- v2.22/js/map/airspace-interaction.css
++++ v2.23/js/map/airspace-interaction.css
+@@ -0,0 +1,7 @@
++.airspace-choice {--choice-border:rgba(255,255,255,.28);}
++.airspace-choice-row {display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:14px;width:100%;min-height:48px;align-items:center;padding:12px;background:transparent;border:0;border-bottom:1px solid var(--choice-border);color:#f5f7fa;text-align:left;font:18px/1.35 Arial;box-sizing:border-box;}
++button.airspace-choice-row {cursor:pointer;touch-action:manipulation;}
++.airspace-choice-row span {overflow-wrap:anywhere;}
++button.airspace-choice-row:hover,button.airspace-choice-row:focus-visible {background:rgba(45,110,190,.75);outline:2px solid #4DA3FF;outline-offset:-2px;}
++.airspace-choice-head {font-weight:700;color:#b7c4d4;}
++.airspace-choice-popup .maplibregl-popup-content {border-radius:22px;}
+--- v2.22/js/map/airspace-volume-layer.mjs
++++ v2.23/js/map/airspace-volume-layer.mjs
+@@ -0,0 +1,54 @@
++import {altitudeRange,buildVolumeTopology,resolveVolumeMesh,triangleContains} from '../domain/airspace-visual-geometry.mjs';
++import {VISUAL_STYLE,visualStyle} from './airspace-visual-style.mjs';
++export function createAirspaceVolumes({map,adapters,onFloating=()=>{}}){
++ const records=new Map(),diagnostics=new Map();let dirty=true,matrix=null,layer=null;
++ const diagnostic=(entry,reason)=>{const key=entry.key+':'+reason;if(diagnostics.has(key))return;diagnostics.set(key,{id:entry.feature.id,name:entry.feature.properties.name,kind:entry.kind,reason});console.warn('[Airspace 3D]',diagnostics.get(key));};
++ function add(entries){for(const entry of entries){const type=entry.kind==='ats'?entry.feature.properties.class:entry.feature.properties.type;if(!(entry.kind==='ats'?['B','C','D'].includes(type):['P','R'].includes(type)))continue;try{records.set(entry.key,{...entry,range:altitudeRange(entry.feature.properties),topology:buildVolumeTopology(entry.feature.geometry),mesh:null});}catch(error){diagnostic(entry,error.message);}}dirty=true;ensureLayer();}
++ function ensureLayer(){if(layer||!adapters)return;layer={id:'airspace-volumes-3d',type:'custom',renderingMode:'3d',
++  onAdd(instance,gl){this.program=adapters.linkProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;uniform vec4 u_color;out vec4 fragColor;void main(){fragColor=u_color;}`);this.buffer=gl.createBuffer();this.vao=gl.createVertexArray();},
++  render(gl,options){
++   matrix=adapters.matrix(options);if(!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return;
++   const bounds=map.getBounds();
++   if(dirty){for(const entry of records.values()){
++    if(!entry.isVisible()){entry.mesh=null;continue;}
++    // Broad phase bounds culls terrain queries for far-away volumes.
++    const xs=entry.topology.points.map(p=>p[0]),ys=entry.topology.points.map(p=>p[1]);
++    entry.inView=!(Math.max(...xs)<bounds.getWest()||Math.min(...xs)>bounds.getEast()||Math.max(...ys)<bounds.getSouth()||Math.min(...ys)>bounds.getNorth());
++    if(!entry.inView){entry.mesh=null;continue;}
++    entry.mesh=resolveVolumeMesh(entry.topology,entry.range,adapters.terrain,adapters.mercator);
++    if(entry.mesh.reason)diagnostic(entry,entry.mesh.reason);onFloating(entry,!!entry.mesh.floating&&!entry.mesh.reason);
++   }dirty=false;}
++   const previous={program:gl.getParameter(gl.CURRENT_PROGRAM),vao:gl.getParameter(gl.VERTEX_ARRAY_BINDING),buffer:gl.getParameter(gl.ARRAY_BUFFER_BINDING),depth:gl.isEnabled(gl.DEPTH_TEST),cull:gl.isEnabled(gl.CULL_FACE),blend:gl.isEnabled(gl.BLEND),mask:gl.getParameter(gl.DEPTH_WRITEMASK),src:gl.getParameter(gl.BLEND_SRC_RGB),dst:gl.getParameter(gl.BLEND_DST_RGB),srcA:gl.getParameter(gl.BLEND_SRC_ALPHA),dstA:gl.getParameter(gl.BLEND_DST_ALPHA)};
++   try{
++    gl.useProgram(this.program);gl.bindVertexArray(this.vao);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);const location=gl.getAttribLocation(this.program,'a_pos');gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(gl.getUniformLocation(this.program,'u_matrix'),false,matrix);
++    // Match Custom FIX: terrain cannot punch holes into the translucent cap.
++    // Source-over blending makes overlapping volumes visibly accumulate/mix.
++    gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
++    for(const entry of records.values()){
++     if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;
++     const s=visualStyle(entry.kind,entry.feature.properties.type),rgb=s.color.match(/\w\w/g).map(v=>parseInt(v,16)/255),selected=entry.isSelected();
++     for(const [vertices,alpha,mode] of [[entry.mesh.walls,selected?s.selectedWall:s.wall,gl.TRIANGLES],[entry.mesh.caps,selected?s.selectedCap:s.cap,gl.TRIANGLES],[entry.mesh.outlines,selected?s.selectedLine:s.line,gl.LINES]]){
++      gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);gl.uniform4f(gl.getUniformLocation(this.program,'u_color'),...rgb,alpha);gl.drawArrays(mode,0,vertices.length/3);
++     }
++    }
++   }finally{
++    gl.depthMask(previous.mask);for(const [flag,on]of [[gl.DEPTH_TEST,previous.depth],[gl.CULL_FACE,previous.cull],[gl.BLEND,previous.blend]])on?gl.enable(flag):gl.disable(flag);
++    gl.blendFuncSeparate(previous.src,previous.dst,previous.srcA,previous.dstA);gl.bindVertexArray(previous.vao);gl.bindBuffer(gl.ARRAY_BUFFER,previous.buffer);gl.useProgram(previous.program);
++   }
++  },onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);gl.deleteVertexArray(this.vao);}
++ };map.addLayer(layer,map.getLayer('airspace-labels')?'airspace-labels':map.getLayer('route-line')?'route-line':undefined);}
++ function invalidate(){dirty=true;map.triggerRepaint();}
++ for(const name of ['moveend','pitchend','idle'])map.on(name,()=>{if(name!=='idle'||dirty)invalidate();});
++ map.on('sourcedata',e=>{if(e.sourceId==='terrainSource'&&e.isSourceLoaded)invalidate();});
++ function screenHits(point){
++  if(!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return [];
++  const canvas=map.getCanvas(),width=canvas.clientWidth,height=canvas.clientHeight;
++  const project=(data,i)=>{const x=data[i],y=data[i+1],z=data[i+2],w=matrix[3]*x+matrix[7]*y+matrix[11]*z+matrix[15];if(w<=0)return null;return {x:(matrix[0]*x+matrix[4]*y+matrix[8]*z+matrix[12])/w*width/2+width/2,y:height/2-(matrix[1]*x+matrix[5]*y+matrix[9]*z+matrix[13])/w*height/2};};
++  const result=[];
++  for(const entry of records.values()){if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;let found=false;
++   for(const data of [entry.mesh.walls,entry.mesh.caps]){for(let i=0;i<data.length;i+=9){const a=project(data,i),b=project(data,i+3),c=project(data,i+6);if(a&&b&&c&&triangleContains(point,a,b,c)){found=true;break;}}if(found)break;}
++   if(found)result.push(entry.key);
++  }return result;
++ }
++ return {add,invalidate,screenHits,getDiagnostics:()=>[...diagnostics.values()],getStatus:()=>({eligible:records.size,drawn:map.getPitch()<=VISUAL_STYLE.topPitch?0:[...records.values()].filter(e=>e.isVisible()&&e.mesh&&!e.mesh.reason).length,diagnostics:[...diagnostics.values()]})};
++}
+--- v2.22/js/domain/airspace-visual-geometry.mjs
++++ v2.23/js/domain/airspace-visual-geometry.mjs
+@@ -0,0 +1,50 @@
++import earcut from '../vendor/earcut.mjs';
++export const polygonParts=g=>g.type==='Polygon'?[g.coordinates]:g.type==='MultiPolygon'?g.coordinates:[];
++function onEdge(p,a,b){const cross=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);return Math.abs(cross)<1e-11&&p[0]>=Math.min(a[0],b[0])-1e-10&&p[0]<=Math.max(a[0],b[0])+1e-10&&p[1]>=Math.min(a[1],b[1])-1e-10&&p[1]<=Math.max(a[1],b[1])+1e-10;}
++export function ringContains(p,ring){let inside=false;for(let i=1;i<ring.length;i++){const a=ring[i-1],b=ring[i];if(onEdge(p,a,b))return 0;if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside?1:-1;}
++export function geometryContains(geometry,p){return polygonParts(geometry).some(poly=>ringContains(p,poly[0])>=0&&!poly.slice(1).some(r=>ringContains(p,r)>=0));}
++// Deliberately reject absent units/reference, mixed historical limits, FL and UNL.
++// This app has no pressure-altitude -> geometric altitude adapter. Never label FL as MSL.
++export function parseAirspaceAltitude(raw){
++ const value=String(raw??'').trim().toUpperCase();
++ if(['GND','SFC','GND/SFC','SFC/GND'].includes(value))return {reference:'AGL',feet:0};
++ if(/^FL\s*\d/.test(value))throw Error('FL 기준의 기하고도 변환 어댑터 없음');
++ if(value==='UNL')throw Error('UNL 상한에는 유한 3D 높이를 지정할 수 없음');
++ const m=/^(\d[\d, ]*(?:\.\d+)?)\s*(?:FT\s*)?(AGL|AMSL|MSL)$/.exec(value);
++ if(!m)throw Error(`단일 고도/단위/기준 해석 불가: ${raw??'NULL'}`);
++ const feet=Number(m[1].replace(/[ ,]/g,''));if(!Number.isFinite(feet))throw Error('고도 숫자 오류');return {reference:m[2]==='AGL'?'AGL':'MSL',feet};
++}
++export function altitudeRange(properties){const lower=parseAirspaceAltitude(properties.lower_limit_raw),upper=parseAirspaceAltitude(properties.upper_limit_raw);if(lower.reference===upper.reference&&upper.feet<lower.feet)throw Error('상한이 하한보다 낮음');return {lower,upper};}
++function distance(a,b){return Math.hypot((a[0]-b[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),(a[1]-b[1])*111320);}
++// Tessellation changes rendering mesh only, never the data/source geometry.
++export function buildVolumeTopology(geometry,maxEdge=5000){
++ const points=[],triangles=[],edges=[];const point=p=>{points.push(p);return points.length-1;};
++ const subdivide=(a,b,c,depth=0)=>{
++  const ds=[distance(points[a],points[b]),distance(points[b],points[c]),distance(points[c],points[a])],largest=Math.max(...ds);
++  if(largest<=maxEdge||depth>=7){triangles.push(a,b,c);return;}
++  const k=ds.indexOf(largest),v=[a,b,c],x=v[k],y=v[(k+1)%3],z=v[(k+2)%3],mid=point(points[x].map((n,i)=>(n+points[y][i])/2));subdivide(x,mid,z,depth+1);subdivide(mid,y,z,depth+1);
++ };
++ for(const poly of polygonParts(geometry)){
++  const flat=[],holes=[],indices=[];
++  poly.forEach((ring,r)=>{if(r)holes.push(flat.length/2);for(const p of ring.slice(0,-1)){flat.push(...p);indices.push(point([...p]));}});
++  const ids=earcut(flat,holes,2);for(let i=0;i<ids.length;i+=3)subdivide(indices[ids[i]],indices[ids[i+1]],indices[ids[i+2]]);
++  for(const ring of poly)for(let i=1;i<ring.length;i++){
++   const a=ring[i-1],b=ring[i],n=Math.max(1,Math.ceil(distance(a,b)/maxEdge));let prev=point([...a]);
++   for(let j=1;j<=n;j++){const next=point(a.map((v,k)=>v+(b[k]-v)*j/n));edges.push(prev,next);prev=next;}
++  }
++ }
++ return {points,triangles,edges};
++}
++export function resolveVolumeMesh(topology,range,terrain,mercator){
++ const lower=[],upper=[];let floating=false;
++ for(const [lon,lat] of topology.points){
++  const ground=terrain(lat,lon),height=value=>value.reference==='AGL'?(ground==null?null:ground+value.feet*.3048):value.feet*.3048;
++  const lo=height(range.lower),hi=height(range.upper);if(lo==null||hi==null)return {reason:'AGL 기준 DEM 미로드'};if(hi<lo)return {reason:'지형 참조 후 상하한 역전'};
++  lower.push(mercator(lon,lat,lo));upper.push(mercator(lon,lat,hi));if(ground!=null&&lo>ground+.1)floating=true;
++ }
++ const walls=[],caps=[],outlines=[],push=(dest,p)=>dest.push(p.x,p.y,p.z);
++ for(let i=0;i<topology.triangles.length;i+=3){const [a,b,c]=topology.triangles.slice(i,i+3);for(const v of [upper[a],upper[b],upper[c],lower[a],lower[c],lower[b]])push(caps,v);}
++ for(let i=0;i<topology.edges.length;i+=2){const a=topology.edges[i],b=topology.edges[i+1];for(const p of [lower[a],lower[b],upper[a],upper[a],lower[b],upper[b]])push(walls,p);for(const p of [lower[a],lower[b],upper[a],upper[b]])push(outlines,p);}
++ return {walls:new Float32Array(walls),caps:new Float32Array(caps),outlines:new Float32Array(outlines),floating};
++}
++export function triangleContains(p,a,b,c){const cross=(x,y,z)=>(y.x-x.x)*(z.y-x.y)-(y.y-x.y)*(z.x-x.x);const d=[cross(a,b,p),cross(b,c,p),cross(c,a,p)];return !(d.some(x=>x<0)&&d.some(x=>x>0))&&Math.abs(cross(a,b,c))>1e-6;}
+--- v2.22/js/vendor/earcut.mjs
++++ v2.23/js/vendor/earcut.mjs
+@@ -0,0 +1,682 @@
++
++export default function earcut(data, holeIndices, dim = 2) {
++
++    const hasHoles = holeIndices && holeIndices.length;
++    const outerLen = hasHoles ? holeIndices[0] * dim : data.length;
++    let outerNode = linkedList(data, 0, outerLen, dim, true);
++    const triangles = [];
++
++    if (!outerNode || outerNode.next === outerNode.prev) return triangles;
++
++    let minX, minY, invSize;
++
++    if (hasHoles) outerNode = eliminateHoles(data, holeIndices, outerNode, dim);
++
++    // if the shape is not too simple, we'll use z-order curve hash later; calculate polygon bbox
++    if (data.length > 80 * dim) {
++        minX = data[0];
++        minY = data[1];
++        let maxX = minX;
++        let maxY = minY;
++
++        for (let i = dim; i < outerLen; i += dim) {
++            const x = data[i];
++            const y = data[i + 1];
++            if (x < minX) minX = x;
++            if (y < minY) minY = y;
++            if (x > maxX) maxX = x;
++            if (y > maxY) maxY = y;
++        }
++
++        // minX, minY and invSize are later used to transform coords into integers for z-order calculation
++        invSize = Math.max(maxX - minX, maxY - minY);
++        invSize = invSize !== 0 ? 32767 / invSize : 0;
++    }
++
++    earcutLinked(outerNode, triangles, dim, minX, minY, invSize, 0);
++
++    return triangles;
++}
++
++// create a circular doubly linked list from polygon points in the specified winding order
++function linkedList(data, start, end, dim, clockwise) {
++    let last;
++
++    if (clockwise === (signedArea(data, start, end, dim) > 0)) {
++        for (let i = start; i < end; i += dim) last = insertNode(i / dim | 0, data[i], data[i + 1], last);
++    } else {
++        for (let i = end - dim; i >= start; i -= dim) last = insertNode(i / dim | 0, data[i], data[i + 1], last);
++    }
++
++    if (last && equals(last, last.next)) {
++        removeNode(last);
++        last = last.next;
++    }
++
++    return last;
++}
++
++// eliminate colinear or duplicate points
++function filterPoints(start, end) {
++    if (!start) return start;
++    if (!end) end = start;
++
++    let p = start,
++        again;
++    do {
++        again = false;
++
++        if (!p.steiner && (equals(p, p.next) || area(p.prev, p, p.next) === 0)) {
++            removeNode(p);
++            p = end = p.prev;
++            if (p === p.next) break;
++            again = true;
++
++        } else {
++            p = p.next;
++        }
++    } while (again || p !== end);
++
++    return end;
++}
++
++// main ear slicing loop which triangulates a polygon (given as a linked list)
++function earcutLinked(ear, triangles, dim, minX, minY, invSize, pass) {
++    if (!ear) return;
++
++    // interlink polygon nodes in z-order
++    if (!pass && invSize) indexCurve(ear, minX, minY, invSize);
++
++    let stop = ear;
++
++    // iterate through ears, slicing them one by one
++    while (ear.prev !== ear.next) {
++        const prev = ear.prev;
++        const next = ear.next;
++
++        if (invSize ? isEarHashed(ear, minX, minY, invSize) : isEar(ear)) {
++            triangles.push(prev.i, ear.i, next.i); // cut off the triangle
++
++            removeNode(ear);
++
++            // skipping the next vertex leads to less sliver triangles
++            ear = next.next;
++            stop = next.next;
++
++            continue;
++        }
++
++        ear = next;
++
++        // if we looped through the whole remaining polygon and can't find any more ears
++        if (ear === stop) {
++            // try filtering points and slicing again
++            if (!pass) {
++                earcutLinked(filterPoints(ear), triangles, dim, minX, minY, invSize, 1);
++
++            // if this didn't work, try curing all small self-intersections locally
++            } else if (pass === 1) {
++                ear = cureLocalIntersections(filterPoints(ear), triangles);
++                earcutLinked(ear, triangles, dim, minX, minY, invSize, 2);
++
++            // as a last resort, try splitting the remaining polygon into two
++            } else if (pass === 2) {
++                splitEarcut(ear, triangles, dim, minX, minY, invSize);
++            }
++
++            break;
++        }
++    }
++}
++
++// check whether a polygon node forms a valid ear with adjacent nodes
++function isEar(ear) {
++    const a = ear.prev,
++        b = ear,
++        c = ear.next;
++
++    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
++
++    // now make sure we don't have other points inside the potential ear
++    const ax = a.x, bx = b.x, cx = c.x, ay = a.y, by = b.y, cy = c.y;
++
++    // triangle bbox
++    const x0 = Math.min(ax, bx, cx),
++        y0 = Math.min(ay, by, cy),
++        x1 = Math.max(ax, bx, cx),
++        y1 = Math.max(ay, by, cy);
++
++    let p = c.next;
++    while (p !== a) {
++        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 &&
++            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) &&
++            area(p.prev, p, p.next) >= 0) return false;
++        p = p.next;
++    }
++
++    return true;
++}
++
++function isEarHashed(ear, minX, minY, invSize) {
++    const a = ear.prev,
++        b = ear,
++        c = ear.next;
++
++    if (area(a, b, c) >= 0) return false; // reflex, can't be an ear
++
++    const ax = a.x, bx = b.x, cx = c.x, ay = a.y, by = b.y, cy = c.y;
++
++    // triangle bbox
++    const x0 = Math.min(ax, bx, cx),
++        y0 = Math.min(ay, by, cy),
++        x1 = Math.max(ax, bx, cx),
++        y1 = Math.max(ay, by, cy);
++
++    // z-order range for the current triangle bbox;
++    const minZ = zOrder(x0, y0, minX, minY, invSize),
++        maxZ = zOrder(x1, y1, minX, minY, invSize);
++
++    let p = ear.prevZ,
++        n = ear.nextZ;
++
++    // look for points inside the triangle in both directions
++    while (p && p.z >= minZ && n && n.z <= maxZ) {
++        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p !== a && p !== c &&
++            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
++        p = p.prevZ;
++
++        if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n !== a && n !== c &&
++            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
++        n = n.nextZ;
++    }
++
++    // look for remaining points in decreasing z-order
++    while (p && p.z >= minZ) {
++        if (p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1 && p !== a && p !== c &&
++            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, p.x, p.y) && area(p.prev, p, p.next) >= 0) return false;
++        p = p.prevZ;
++    }
++
++    // look for remaining points in increasing z-order
++    while (n && n.z <= maxZ) {
++        if (n.x >= x0 && n.x <= x1 && n.y >= y0 && n.y <= y1 && n !== a && n !== c &&
++            pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, n.x, n.y) && area(n.prev, n, n.next) >= 0) return false;
++        n = n.nextZ;
++    }
++
++    return true;
++}
++
++// go through all polygon nodes and cure small local self-intersections
++function cureLocalIntersections(start, triangles) {
++    let p = start;
++    do {
++        const a = p.prev,
++            b = p.next.next;
++
++        if (!equals(a, b) && intersects(a, p, p.next, b) && locallyInside(a, b) && locallyInside(b, a)) {
++
++            triangles.push(a.i, p.i, b.i);
++
++            // remove two nodes involved
++            removeNode(p);
++            removeNode(p.next);
++
++            p = start = b;
++        }
++        p = p.next;
++    } while (p !== start);
++
++    return filterPoints(p);
++}
++
++// try splitting polygon into two and triangulate them independently
++function splitEarcut(start, triangles, dim, minX, minY, invSize) {
++    // look for a valid diagonal that divides the polygon into two
++    let a = start;
++    do {
++        let b = a.next.next;
++        while (b !== a.prev) {
++            if (a.i !== b.i && isValidDiagonal(a, b)) {
++                // split the polygon in two by the diagonal
++                let c = splitPolygon(a, b);
++
++                // filter colinear points around the cuts
++                a = filterPoints(a, a.next);
++                c = filterPoints(c, c.next);
++
++                // run earcut on each half
++                earcutLinked(a, triangles, dim, minX, minY, invSize, 0);
++                earcutLinked(c, triangles, dim, minX, minY, invSize, 0);
++                return;
++            }
++            b = b.next;
++        }
++        a = a.next;
++    } while (a !== start);
++}
++
++// link every hole into the outer loop, producing a single-ring polygon without holes
++function eliminateHoles(data, holeIndices, outerNode, dim) {
++    const queue = [];
++
++    for (let i = 0, len = holeIndices.length; i < len; i++) {
++        const start = holeIndices[i] * dim;
++        const end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
++        const list = linkedList(data, start, end, dim, false);
++        if (list === list.next) list.steiner = true;
++        queue.push(getLeftmost(list));
++    }
++
++    queue.sort(compareXYSlope);
++
++    // process holes from left to right
++    for (let i = 0; i < queue.length; i++) {
++        outerNode = eliminateHole(queue[i], outerNode);
++    }
++
++    return outerNode;
++}
++
++function compareXYSlope(a, b) {
++    let result = a.x - b.x;
++    // when the left-most point of 2 holes meet at a vertex, sort the holes counterclockwise so that when we find
++    // the bridge to the outer shell is always the point that they meet at.
++    if (result === 0) {
++        result = a.y - b.y;
++        if (result === 0) {
++            const aSlope = (a.next.y - a.y) / (a.next.x - a.x);
++            const bSlope = (b.next.y - b.y) / (b.next.x - b.x);
++            result = aSlope - bSlope;
++        }
++    }
++    return result;
++}
++
++// find a bridge between vertices that connects hole with an outer ring and link it
++function eliminateHole(hole, outerNode) {
++    const bridge = findHoleBridge(hole, outerNode);
++    if (!bridge) {
++        return outerNode;
++    }
++
++    const bridgeReverse = splitPolygon(bridge, hole);
++
++    // filter collinear points around the cuts
++    filterPoints(bridgeReverse, bridgeReverse.next);
++    return filterPoints(bridge, bridge.next);
++}
++
++// David Eberly's algorithm for finding a bridge between hole and outer polygon
++function findHoleBridge(hole, outerNode) {
++    let p = outerNode;
++    const hx = hole.x;
++    const hy = hole.y;
++    let qx = -Infinity;
++    let m;
++
++    // find a segment intersected by a ray from the hole's leftmost point to the left;
++    // segment's endpoint with lesser x will be potential connection point
++    // unless they intersect at a vertex, then choose the vertex
++    if (equals(hole, p)) return p;
++    do {
++        if (equals(hole, p.next)) return p.next;
++        else if (hy <= p.y && hy >= p.next.y && p.next.y !== p.y) {
++            const x = p.x + (hy - p.y) * (p.next.x - p.x) / (p.next.y - p.y);
++            if (x <= hx && x > qx) {
++                qx = x;
++                m = p.x < p.next.x ? p : p.next;
++                if (x === hx) return m; // hole touches outer segment; pick leftmost endpoint
++            }
++        }
++        p = p.next;
++    } while (p !== outerNode);
++
++    if (!m) return null;
++
++    // look for points inside the triangle of hole point, segment intersection and endpoint;
++    // if there are no points found, we have a valid connection;
++    // otherwise choose the point of the minimum angle with the ray as connection point
++
++    const stop = m;
++    const mx = m.x;
++    const my = m.y;
++    let tanMin = Infinity;
++
++    p = m;
++
++    do {
++        if (hx >= p.x && p.x >= mx && hx !== p.x &&
++                pointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.x, p.y)) {
++
++            const tan = Math.abs(hy - p.y) / (hx - p.x); // tangential
++
++            if (locallyInside(p, hole) &&
++                (tan < tanMin || (tan === tanMin && (p.x > m.x || (p.x === m.x && sectorContainsSector(m, p)))))) {
++                m = p;
++                tanMin = tan;
++            }
++        }
++
++        p = p.next;
++    } while (p !== stop);
++
++    return m;
++}
++
++// whether sector in vertex m contains sector in vertex p in the same coordinates
++function sectorContainsSector(m, p) {
++    return area(m.prev, m, p.prev) < 0 && area(p.next, m, m.next) < 0;
++}
++
++// interlink polygon nodes in z-order
++function indexCurve(start, minX, minY, invSize) {
++    let p = start;
++    do {
++        if (p.z === 0) p.z = zOrder(p.x, p.y, minX, minY, invSize);
++        p.prevZ = p.prev;
++        p.nextZ = p.next;
++        p = p.next;
++    } while (p !== start);
++
++    p.prevZ.nextZ = null;
++    p.prevZ = null;
++
++    sortLinked(p);
++}
++
++// Simon Tatham's linked list merge sort algorithm
++// http://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
++function sortLinked(list) {
++    let numMerges;
++    let inSize = 1;
++
++    do {
++        let p = list;
++        let e;
++        list = null;
++        let tail = null;
++        numMerges = 0;
++
++        while (p) {
++            numMerges++;
++            let q = p;
++            let pSize = 0;
++            for (let i = 0; i < inSize; i++) {
++                pSize++;
++                q = q.nextZ;
++                if (!q) break;
++            }
++            let qSize = inSize;
++
++            while (pSize > 0 || (qSize > 0 && q)) {
++
++                if (pSize !== 0 && (qSize === 0 || !q || p.z <= q.z)) {
++                    e = p;
++                    p = p.nextZ;
++                    pSize--;
++                } else {
++                    e = q;
++                    q = q.nextZ;
++                    qSize--;
++                }
++
++                if (tail) tail.nextZ = e;
++                else list = e;
++
++                e.prevZ = tail;
++                tail = e;
++            }
++
++            p = q;
++        }
++
++        tail.nextZ = null;
++        inSize *= 2;
++
++    } while (numMerges > 1);
++
++    return list;
++}
++
++// z-order of a point given coords and inverse of the longer side of data bbox
++function zOrder(x, y, minX, minY, invSize) {
++    // coords are transformed into non-negative 15-bit integer range
++    x = (x - minX) * invSize | 0;
++    y = (y - minY) * invSize | 0;
++
++    x = (x | (x << 8)) & 0x00FF00FF;
++    x = (x | (x << 4)) & 0x0F0F0F0F;
++    x = (x | (x << 2)) & 0x33333333;
++    x = (x | (x << 1)) & 0x55555555;
++
++    y = (y | (y << 8)) & 0x00FF00FF;
++    y = (y | (y << 4)) & 0x0F0F0F0F;
++    y = (y | (y << 2)) & 0x33333333;
++    y = (y | (y << 1)) & 0x55555555;
++
++    return x | (y << 1);
++}
++
++// find the leftmost node of a polygon ring
++function getLeftmost(start) {
++    let p = start,
++        leftmost = start;
++    do {
++        if (p.x < leftmost.x || (p.x === leftmost.x && p.y < leftmost.y)) leftmost = p;
++        p = p.next;
++    } while (p !== start);
++
++    return leftmost;
++}
++
++// check if a point lies within a convex triangle
++function pointInTriangle(ax, ay, bx, by, cx, cy, px, py) {
++    return (cx - px) * (ay - py) >= (ax - px) * (cy - py) &&
++           (ax - px) * (by - py) >= (bx - px) * (ay - py) &&
++           (bx - px) * (cy - py) >= (cx - px) * (by - py);
++}
++
++// check if a point lies within a convex triangle but false if its equal to the first point of the triangle
++function pointInTriangleExceptFirst(ax, ay, bx, by, cx, cy, px, py) {
++    return !(ax === px && ay === py) && pointInTriangle(ax, ay, bx, by, cx, cy, px, py);
++}
++
++// check if a diagonal between two polygon nodes is valid (lies in polygon interior)
++function isValidDiagonal(a, b) {
++    return a.next.i !== b.i && a.prev.i !== b.i && !intersectsPolygon(a, b) && // doesn't intersect other edges
++           (locallyInside(a, b) && locallyInside(b, a) && middleInside(a, b) && // locally visible
++            (area(a.prev, a, b.prev) || area(a, b.prev, b)) || // does not create opposite-facing sectors
++            equals(a, b) && area(a.prev, a, a.next) > 0 && area(b.prev, b, b.next) > 0); // special zero-length case
++}
++
++// signed area of a triangle
++function area(p, q, r) {
++    return (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y);
++}
++
++// check if two points are equal
++function equals(p1, p2) {
++    return p1.x === p2.x && p1.y === p2.y;
++}
++
++// check if two segments intersect
++function intersects(p1, q1, p2, q2) {
++    const o1 = sign(area(p1, q1, p2));
++    const o2 = sign(area(p1, q1, q2));
++    const o3 = sign(area(p2, q2, p1));
++    const o4 = sign(area(p2, q2, q1));
++
++    if (o1 !== o2 && o3 !== o4) return true; // general case
++
++    if (o1 === 0 && onSegment(p1, p2, q1)) return true; // p1, q1 and p2 are collinear and p2 lies on p1q1
++    if (o2 === 0 && onSegment(p1, q2, q1)) return true; // p1, q1 and q2 are collinear and q2 lies on p1q1
++    if (o3 === 0 && onSegment(p2, p1, q2)) return true; // p2, q2 and p1 are collinear and p1 lies on p2q2
++    if (o4 === 0 && onSegment(p2, q1, q2)) return true; // p2, q2 and q1 are collinear and q1 lies on p2q2
++
++    return false;
++}
++
++// for collinear points p, q, r, check if point q lies on segment pr
++function onSegment(p, q, r) {
++    return q.x <= Math.max(p.x, r.x) && q.x >= Math.min(p.x, r.x) && q.y <= Math.max(p.y, r.y) && q.y >= Math.min(p.y, r.y);
++}
++
++function sign(num) {
++    return num > 0 ? 1 : num < 0 ? -1 : 0;
++}
++
++// check if a polygon diagonal intersects any polygon segments
++function intersectsPolygon(a, b) {
++    let p = a;
++    do {
++        if (p.i !== a.i && p.next.i !== a.i && p.i !== b.i && p.next.i !== b.i &&
++                intersects(p, p.next, a, b)) return true;
++        p = p.next;
++    } while (p !== a);
++
++    return false;
++}
++
++// check if a polygon diagonal is locally inside the polygon
++function locallyInside(a, b) {
++    return area(a.prev, a, a.next) < 0 ?
++        area(a, b, a.next) >= 0 && area(a, a.prev, b) >= 0 :
++        area(a, b, a.prev) < 0 || area(a, a.next, b) < 0;
++}
++
++// check if the middle point of a polygon diagonal is inside the polygon
++function middleInside(a, b) {
++    let p = a;
++    let inside = false;
++    const px = (a.x + b.x) / 2;
++    const py = (a.y + b.y) / 2;
++    do {
++        if (((p.y > py) !== (p.next.y > py)) && p.next.y !== p.y &&
++                (px < (p.next.x - p.x) * (py - p.y) / (p.next.y - p.y) + p.x))
++            inside = !inside;
++        p = p.next;
++    } while (p !== a);
++
++    return inside;
++}
++
++// link two polygon vertices with a bridge; if the vertices belong to the same ring, it splits polygon into two;
++// if one belongs to the outer ring and another to a hole, it merges it into a single ring
++function splitPolygon(a, b) {
++    const a2 = createNode(a.i, a.x, a.y),
++        b2 = createNode(b.i, b.x, b.y),
++        an = a.next,
++        bp = b.prev;
++
++    a.next = b;
++    b.prev = a;
++
++    a2.next = an;
++    an.prev = a2;
++
++    b2.next = a2;
++    a2.prev = b2;
++
++    bp.next = b2;
++    b2.prev = bp;
++
++    return b2;
++}
++
++// create a node and optionally link it with previous one (in a circular doubly linked list)
++function insertNode(i, x, y, last) {
++    const p = createNode(i, x, y);
++
++    if (!last) {
++        p.prev = p;
++        p.next = p;
++
++    } else {
++        p.next = last.next;
++        p.prev = last;
++        last.next.prev = p;
++        last.next = p;
++    }
++    return p;
++}
++
++function removeNode(p) {
++    p.next.prev = p.prev;
++    p.prev.next = p.next;
++
++    if (p.prevZ) p.prevZ.nextZ = p.nextZ;
++    if (p.nextZ) p.nextZ.prevZ = p.prevZ;
++}
++
++function createNode(i, x, y) {
++    return {
++        i, // vertex index in coordinates array
++        x, y, // vertex coordinates
++        prev: null, // previous and next vertex nodes in a polygon ring
++        next: null,
++        z: 0, // z-order curve value
++        prevZ: null, // previous and next nodes in z-order
++        nextZ: null,
++        steiner: false // indicates whether this is a steiner point
++    };
++}
++
++// return a percentage difference between the polygon area and its triangulation area;
++// used to verify correctness of triangulation
++export function deviation(data, holeIndices, dim, triangles) {
++    const hasHoles = holeIndices && holeIndices.length;
++    const outerLen = hasHoles ? holeIndices[0] * dim : data.length;
++
++    let polygonArea = Math.abs(signedArea(data, 0, outerLen, dim));
++    if (hasHoles) {
++        for (let i = 0, len = holeIndices.length; i < len; i++) {
++            const start = holeIndices[i] * dim;
++            const end = i < len - 1 ? holeIndices[i + 1] * dim : data.length;
++            polygonArea -= Math.abs(signedArea(data, start, end, dim));
++        }
++    }
++
++    let trianglesArea = 0;
++    for (let i = 0; i < triangles.length; i += 3) {
++        const a = triangles[i] * dim;
++        const b = triangles[i + 1] * dim;
++        const c = triangles[i + 2] * dim;
++        trianglesArea += Math.abs(
++            (data[a] - data[c]) * (data[b + 1] - data[a + 1]) -
++            (data[a] - data[b]) * (data[c + 1] - data[a + 1]));
++    }
++
++    return polygonArea === 0 && trianglesArea === 0 ? 0 :
++        Math.abs((trianglesArea - polygonArea) / polygonArea);
++}
++
++function signedArea(data, start, end, dim) {
++    let sum = 0;
++    for (let i = start, j = end - dim; i < end; i += dim) {
++        sum += (data[j] - data[i]) * (data[i + 1] + data[j + 1]);
++        j = i;
++    }
++    return sum;
++}
++
++// turn a polygon in a multi-dimensional array form (e.g. as in GeoJSON) into a form Earcut accepts
++export function flatten(data) {
++    const vertices = [];
++    const holes = [];
++    const dimensions = data[0][0].length;
++    let holeIndex = 0;
++    let prevLen = 0;
++
++    for (const ring of data) {
++        for (const p of ring) {
++            for (let d = 0; d < dimensions; d++) vertices.push(p[d]);
++        }
++        if (prevLen) {
++            holeIndex += prevLen;
++            holes.push(holeIndex);
++        }
++        prevLen = ring.length;
++    }
++    return {vertices, holes, dimensions};
++}
+--- v2.22/js/vendor/earcut-LICENSE
++++ v2.23/js/vendor/earcut-LICENSE
+@@ -0,0 +1,15 @@
++ISC License
++
++Copyright (c) 2024, Mapbox
++
++Permission to use, copy, modify, and/or distribute this software for any purpose
++with or without fee is hereby granted, provided that the above copyright notice
++and this permission notice appear in all copies.
++
++THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
++REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
++FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
++INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
++OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
++TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
++THIS SOFTWARE.

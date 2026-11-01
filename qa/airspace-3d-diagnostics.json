@@ -1,0 +1,296 @@
+[
+  {
+    "id": "airspace-072",
+    "name": "RK P73 SEOUL",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-073",
+    "name": "RK R1 YONGMUN",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 6000"
+  },
+  {
+    "id": "airspace-074",
+    "name": "RK R10 MAEBONG",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 5000"
+  },
+  {
+    "id": "airspace-075",
+    "name": "RK R100 NAMHYONGJEDO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 500"
+  },
+  {
+    "id": "airspace-076",
+    "name": "RK R104 MIYEODO",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-077",
+    "name": "RK R105 JIKDO",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-078",
+    "name": "RK R107 DONG-HAE-BUK-BU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-079",
+    "name": "RK R108A ANHEUNG-A",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-080",
+    "name": "RK R108B ANHEUNG-B",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-081",
+    "name": "RK R108C ANHEUNG-C",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-082",
+    "name": "RK R108D ANHEUNG-D",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-083",
+    "name": "RK R108E ANHEUNG-E",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-084",
+    "name": "RK R108F ANHEUNG-F",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-085",
+    "name": "RK R110 PILSEUNG",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-086",
+    "name": "RK R111 UNGCHON",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-087",
+    "name": "RK R114 BISEUNG",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3000"
+  },
+  {
+    "id": "airspace-088",
+    "name": "RK R116 DAECHONGDO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 2500"
+  },
+  {
+    "id": "airspace-089",
+    "name": "RK R117 JAEUNDO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3000"
+  },
+  {
+    "id": "airspace-090",
+    "name": "RK R122 CHEONDUKBONG",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3700"
+  },
+  {
+    "id": "airspace-091",
+    "name": "RK R125 HEUKSANDO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3500"
+  },
+  {
+    "id": "airspace-092",
+    "name": "RK R127 BEOLGYO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3000"
+  },
+  {
+    "id": "airspace-093",
+    "name": "RK R129 SURYUNSAN",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3500"
+  },
+  {
+    "id": "airspace-094",
+    "name": "RK R132 DAECHONGDO EAST",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 10000"
+  },
+  {
+    "id": "airspace-095",
+    "name": "RK R133 CHOCHIDO",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 500"
+  },
+  {
+    "id": "airspace-097",
+    "name": "RK R138 DAECHEON",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 4400"
+  },
+  {
+    "id": "airspace-098",
+    "name": "RK R139 JINCHEON",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 5400"
+  },
+  {
+    "id": "airspace-099",
+    "name": "RK R14 PYEONGDONG",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: NULL"
+  },
+  {
+    "id": "airspace-111",
+    "name": "RK R155B SEONGJU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-114",
+    "name": "RK R17 YEOJU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-115",
+    "name": "RK R19 JOCHIWON",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 3400"
+  },
+  {
+    "id": "airspace-116",
+    "name": "RK R20 BOEUN",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 5000"
+  },
+  {
+    "id": "airspace-117",
+    "name": "RK R21 EONYANG",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 5000"
+  },
+  {
+    "id": "airspace-118",
+    "name": "RK R35 MAESANRI",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 2500"
+  },
+  {
+    "id": "airspace-119",
+    "name": "RK R74 DONG-HAE-NAM-BU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-121",
+    "name": "RK R77 MACHAJIN",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-122",
+    "name": "RK R80 SEO-HAE-JUNG-BU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-123",
+    "name": "RK R81 NAKDONG",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-124",
+    "name": "RK R84 SEO-HAE-NAM-BU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-125",
+    "name": "RK R88 SEO-HAE-BUK-BU",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-126",
+    "name": "RK R89 OCHON",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 1000"
+  },
+  {
+    "id": "airspace-127",
+    "name": "RK R90A SUSONG-A",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 2000"
+  },
+  {
+    "id": "airspace-128",
+    "name": "RK R90B SUSONG-B",
+    "kind": "airspace",
+    "reason": "단일 고도/단위/기준 해석 불가: 5500"
+  },
+  {
+    "id": "airspace-129",
+    "name": "RK R97A CHEOLMAE-A",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-130",
+    "name": "RK R97B CHEOLMAE-B",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-131",
+    "name": "RK R97C CHEOLMAE-C",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-132",
+    "name": "RK R97D CHEOLMAE-D",
+    "kind": "airspace",
+    "reason": "UNL 상한에는 유한 3D 높이를 지정할 수 없음"
+  },
+  {
+    "id": "airspace-133",
+    "name": "RK R97E CHEOLMAE-E",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-134",
+    "name": "RK R97F CHEOLMAE-F",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  },
+  {
+    "id": "airspace-135",
+    "name": "RK R97G CHEOLMAE-G",
+    "kind": "airspace",
+    "reason": "FL 기준의 기하고도 변환 어댑터 없음"
+  }
+]

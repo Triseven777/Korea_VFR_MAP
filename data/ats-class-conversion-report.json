@@ -1,0 +1,26 @@
+{
+  "loaded": 56,
+  "rendered": 52,
+  "failures": [],
+  "classRecords": {
+    "B": 9,
+    "C": 24,
+    "D": 21,
+    "E": 2
+  },
+  "renderedClasses": {
+    "B": 9,
+    "C": 24,
+    "D": 19
+  },
+  "excludedRules": [
+    "Airways Class D",
+    "Seoul TMA upper Class D excluding Class B",
+    "Class E over ROK territory and territorial waters",
+    "Class E over high seas within Incheon FIR"
+  ],
+  "referenceBindings": {
+    "CHEONGJU CONTROL ZONE": "CHEONGJU Class D Core",
+    "SUWON CONTROL ZONE": "SUWON Class D Core"
+  }
+}

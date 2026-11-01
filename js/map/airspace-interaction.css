@@ -1,0 +1,7 @@
+.airspace-choice {--choice-border:rgba(255,255,255,.28);}
+.airspace-choice-row {display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:14px;width:100%;min-height:48px;align-items:center;padding:12px;background:transparent;border:0;border-bottom:1px solid var(--choice-border);color:#f5f7fa;text-align:left;font:18px/1.35 Arial;box-sizing:border-box;}
+button.airspace-choice-row {cursor:pointer;touch-action:manipulation;}
+.airspace-choice-row span {overflow-wrap:anywhere;}
+button.airspace-choice-row:hover,button.airspace-choice-row:focus-visible {background:rgba(45,110,190,.75);outline:2px solid #4DA3FF;outline-offset:-2px;}
+.airspace-choice-head {font-weight:700;color:#b7c4d4;}
+.airspace-choice-popup .maplibregl-popup-content {border-radius:22px;}

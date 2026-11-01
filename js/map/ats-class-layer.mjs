@@ -1,14 +1,15 @@
+import {VISUAL_STYLE,selectedOpacity} from './airspace-visual-style.mjs';
 import {AtsClassRepository} from '../data/ats-class-repository.mjs';
 import {buildAtsClassGeoJson} from '../domain/ats-class-geometry.mjs';
-export const ATS_CLASS_STYLE=Object.freeze({color:'#7C76A8',width:2,opacity:.85,fillOpacity:.04});
+export const ATS_CLASS_STYLE=Object.freeze({color:VISUAL_STYLE.class.color,width:2,opacity:VISUAL_STYLE.class.line,fillOpacity:VISUAL_STYLE.class.fill});
 const SHAPE_IDS=['ats-class-fill','ats-class-line'],LABEL_ID='ats-class-labels';
-export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,repository=new AtsClassRepository()}){
+export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,repository=new AtsClassRepository(),interaction=null}){
  let visible=true,initialized=false,pending=null,converted=null,popup=null;
  const toggle=document.getElementById('atsClassToggle'),status=document.getElementById('atsClassStatus');
  function setVisible(on){
   visible=Boolean(on);
   for(const id of [...SHAPE_IDS,LABEL_ID])if(map.getLayer(id))map.setLayoutProperty(id,'visibility',visible?'visible':'none');
-  if(!visible)popup?.remove();toggle.textContent=`ATS CLASS ${visible?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(visible));
+  if(!visible)popup?.remove();interaction?.visibilityChanged();toggle.textContent=`ATS CLASS ${visible?'ON':'OFF'}`;toggle.setAttribute('aria-pressed',String(visible));
  }
  toggle.addEventListener('click',()=>setVisible(!visible));
  async function initialize(){
@@ -18,18 +19,18 @@ export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,reposito
    map.addSource('ats-class-source',{type:'geojson',data:converted.geojson});
    map.addSource('ats-class-label-source',{type:'geojson',data:converted.labels});
    // Insert only the new layers. Do not move/rewrite any existing airspace layer.
-   const before=['ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','D','R','P'].flatMap(t=>[`airspace-${t}-fill`,`airspace-${t}-line`]).find(id=>map.getLayer(id))??(map.getLayer('route-line')?'route-line':undefined);
+   const before=['D','R','P'].flatMap(t=>[`airspace-${t}-fill`,`airspace-${t}-line`]).find(id=>map.getLayer(id))??(map.getLayer('route-line')?'route-line':undefined);
    const s=ATS_CLASS_STYLE;
-   map.addLayer({id:SHAPE_IDS[0],type:'fill',source:'ats-class-source',paint:{'fill-color':s.color,'fill-opacity':s.fillOpacity,'fill-antialias':true}},before);
-   map.addLayer({id:SHAPE_IDS[1],type:'line',source:'ats-class-source',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':s.color,'line-width':s.width,'line-opacity':s.opacity}},before);
+   map.addLayer({id:SHAPE_IDS[0],type:'fill',source:'ats-class-source',paint:{'fill-color':s.color,'fill-opacity':selectedOpacity(s.fillOpacity,VISUAL_STYLE.class.selectedFill),'fill-antialias':true}},before);
+   map.addLayer({id:SHAPE_IDS[1],type:'line',source:'ats-class-source',layout:{'line-join':'round','line-cap':'round'},paint:{'line-color':s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(s.opacity,VISUAL_STYLE.class.selectedLine)}},before);
    map.addLayer({id:LABEL_ID,type:'symbol',source:'ats-class-label-source',minzoom:6,
-    filter:['step',['zoom'],['==',['get','class'],'B'],7,['in',['get','class'],['literal',['B','C']]],8,true],
+    filter:['step',['zoom'],['in',['get','class'],['literal',['A','B']]],7,['in',['get','class'],['literal',['A','B','C']]],8,true],
     layout:{'symbol-placement':'point','text-field':['get','label'],'text-font':['AirspaceSans'],'text-size':['interpolate',['linear'],['zoom'],6,12,11,14,14,15],'text-line-height':1.25,'text-max-width':20,'text-padding':7,'text-allow-overlap':false,'text-ignore-placement':false,'symbol-sort-key':['match',['get','class'],'B',0,'C',1,2]},
     paint:{'text-color':s.color,'text-halo-color':'rgba(8,12,18,0.98)','text-halo-width':2}},map.getLayer('route-line')?'route-line':undefined);
    initialized=true;setVisible(visible);
    status.textContent=`B/C/D · ${converted.geojson.features.length} 표시 · ${converted.failures.length} 제외`;
    status.title=converted.failures.map(f=>`${f.name} / ${f.class} / ${f.geometry_type}: ${f.reason}`).join('\n');
-   map.on('click',inspect);return getStatus();
+   if(interaction)interaction.register({kind:'ats',features:converted.geojson.features,source:'ats-class-source',isVisible:()=>visible,repository});else map.on('click',inspect);return getStatus();
   })().catch(error=>{pending=null;status.textContent='ATS Class 로드 실패';console.error('[ATS Class]',error);throw error;});return pending;
  }
  function isBlocked(event){
@@ -54,8 +55,8 @@ export function createAtsClassLayer({map,maplibregl,canInspect=()=>true,reposito
   if(!selected.length)return;
   const record=repository.getById(selected[0].properties.id);if(!record)return;
   popup?.remove();const root=document.createElement('section');root.className='airspace-popup-body';
-  const title=document.createElement('h2');title.textContent=`CLASS ${record.class}`;root.appendChild(title);
-  for(const [key,value] of [['Name',record.name],['ICAO',record.icao],['Lower Limit',record.lower_limit_raw],['Upper Limit',record.upper_limit_raw]]){
+  const title=document.createElement('h2');title.textContent=record.name;root.appendChild(title);
+  for(const [key,value] of [['Type',record.class],['ICAO',record.icao],['Lower Limit',record.lower_limit_raw],['Upper Limit',record.upper_limit_raw]]){
    const row=document.createElement('div'),label=document.createElement('span'),text=document.createElement('strong');row.className='airspace-detail-row';label.textContent=key;text.textContent=value??'—';row.append(label,text);root.appendChild(row);
   }
   const metadata=document.createElement('small');metadata.textContent=`${record.source_section??''}\nSource effective: ${record.source_effective_date??'UNKNOWN'}\n${record.validation_status??''}`;root.appendChild(metadata);

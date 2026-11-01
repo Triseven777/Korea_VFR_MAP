@@ -1,110 +1,4 @@
 {
-  "baselineSuccess": 248,
-  "recovered": [
-    {
-      "id": "airspace-056",
-      "type": "CTR",
-      "name": "GANGNEUNG CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-057",
-      "type": "CTR",
-      "name": "HAEMI CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-058",
-      "type": "CTR",
-      "name": "ICHEON CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-059",
-      "type": "CTR",
-      "name": "JINHAE CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-060",
-      "type": "CTR",
-      "name": "JUNGWON CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-061",
-      "type": "CTR",
-      "name": "MOKPO CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-062",
-      "type": "CTR",
-      "name": "NONSAN CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-063",
-      "type": "CTR",
-      "name": "OSAN CONTROL ZONE",
-      "operation": "DIFFERENCE"
-    },
-    {
-      "id": "airspace-064",
-      "type": "CTR",
-      "name": "PYEONGTAEK CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-067",
-      "type": "CTR",
-      "name": "SUWON CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-068",
-      "type": "CTR",
-      "name": "YECHEON CONTROL ZONE",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-072",
-      "type": "P",
-      "name": "RK P73 SEOUL",
-      "operation": "CAPSULE_OUTER_ENVELOPE"
-    },
-    {
-      "id": "airspace-099",
-      "type": "R",
-      "name": "RK R14 PYEONGDONG",
-      "operation": "POLYGON"
-    },
-    {
-      "id": "airspace-111",
-      "type": "R",
-      "name": "RK R155B SEONGJU",
-      "operation": "DIFFERENCE"
-    },
-    {
-      "id": "airspace-112",
-      "type": "R",
-      "name": "RK R157 JANGSAN",
-      "operation": "CIRCLE"
-    },
-    {
-      "id": "airspace-197",
-      "type": "A",
-      "name": "RK A810 HANAM",
-      "operation": "DIFFERENCE"
-    },
-    {
-      "id": "airspace-198",
-      "type": "A",
-      "name": "RK A811 BUCHEON",
-      "operation": "DIFFERENCE"
-    }
-  ],
-  "rendered": 265,
   "failures": [
     {
       "id": "airspace-000",
@@ -134,37 +28,25 @@
       "id": "airspace-035",
       "type": "TMA",
       "name": "Osan Terminal Control Area",
-      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+      "reason": "Patch v2.2: ARC 끝점이 명시 반경과 불일치"
     },
     {
       "id": "airspace-036",
       "type": "TMA",
       "name": "Osan Terminal Control Area",
-      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
+      "reason": "Patch v2.2: ARC 끝점이 명시 반경과 불일치"
     },
     {
       "id": "airspace-049",
       "type": "TMA",
       "name": "Seoul Terminal Control Area",
-      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
-    },
-    {
-      "id": "airspace-051",
-      "type": "TMA",
-      "name": "Seoul Terminal Control Area",
-      "reason": "ARC 중심 좌표/방향/끝점/반경의 완전 정의 없음"
-    },
-    {
-      "id": "airspace-065",
-      "type": "CTR",
-      "name": "SEONGMU CONTROL ZONE",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+      "reason": "Patch v2.2: ARC 끝점이 명시 반경과 불일치"
     },
     {
       "id": "airspace-066",
       "type": "CTR",
       "name": "SOKCHO CONTROL ZONE",
-      "reason": "제외 영역의 명시적 완전 경계/차집합 정의 필요"
+      "reason": "DEPENDENCY_BLOCKED: Yangyang은 해결됐지만 P518 geometry가 미해결. P518 확정 뒤 적용."
     },
     {
       "id": "airspace-069",
@@ -185,18 +67,6 @@
       "reason": "국경/군사분계선/해안선의 실제 경계 좌표 없음"
     },
     {
-      "id": "airspace-132",
-      "type": "R",
-      "name": "RK R97D CHEOLMAE-D",
-      "reason": "정의되지 않은 경계 지시문/누락된 좌표: alternatecoordinatesequencealsoshowninAIP"
-    },
-    {
-      "id": "airspace-222",
-      "type": "MOA",
-      "name": "MOA 17",
-      "reason": "자기교차 경계: 순서 추정/보정하지 않음"
-    },
-    {
       "id": "airspace-229",
       "type": "MOA",
       "name": "MOA 23",
@@ -207,12 +77,55 @@
       "type": "MOA",
       "name": "MOA 28",
       "reason": "중복 꼭짓점/여러 경계 혼합: 임의 정리하지 않음"
+    }
+  ],
+  "recovered": [
+    {
+      "id": "airspace-051",
+      "name": "Seoul Terminal Control Area",
+      "type": "TMA"
+    },
+    {
+      "id": "airspace-065",
+      "name": "SEONGMU CONTROL ZONE",
+      "type": "CTR"
+    },
+    {
+      "id": "airspace-132",
+      "name": "RK R97D CHEOLMAE-D",
+      "type": "R"
+    },
+    {
+      "id": "airspace-222",
+      "name": "MOA 17",
+      "type": "MOA"
     },
     {
       "id": "airspace-274",
-      "type": "ACMI",
       "name": "ACMI C",
-      "reason": "중복 꼭짓점/여러 경계 혼합: 임의 정리하지 않음"
+      "type": "ACMI"
     }
-  ]
+  ],
+  "arcAudit": [
+    {
+      "id": "airspace-051",
+      "name": "Seoul Terminal Control Area",
+      "start": [
+        126.77027777777778,
+        36.72083333333334
+      ],
+      "end": [
+        126.0436111111111,
+        36.98083333333334
+      ],
+      "center": [
+        126.7975,
+        37.55694444444444
+      ],
+      "radius_nm": 50,
+      "direction": "CW",
+      "endpoint_preserved": true
+    }
+  ],
+  "previousSuccess": 265
 }

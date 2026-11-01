@@ -1,4 +1,4 @@
-export const ATS_VISIBLE_CLASSES=Object.freeze(['B','C','D']);
+export const ATS_VISIBLE_CLASSES=Object.freeze(['A','B','C','D']);
 export function isAtsMapVolume(record){return record.record_type==='ATS_CLASS_VOLUME'&&ATS_VISIBLE_CLASSES.includes(record.class);}
 export const atsRecordId=(record,index)=>String(record.id??`ats-class-${String(index).padStart(3,'0')}`);
 export class AtsClassRepository {
