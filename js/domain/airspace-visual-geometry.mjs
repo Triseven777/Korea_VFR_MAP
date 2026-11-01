@@ -3,18 +3,22 @@ export const polygonParts=g=>g.type==='Polygon'?[g.coordinates]:g.type==='MultiP
 function onEdge(p,a,b){const cross=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);return Math.abs(cross)<1e-11&&p[0]>=Math.min(a[0],b[0])-1e-10&&p[0]<=Math.max(a[0],b[0])+1e-10&&p[1]>=Math.min(a[1],b[1])-1e-10&&p[1]<=Math.max(a[1],b[1])+1e-10;}
 export function ringContains(p,ring){let inside=false;for(let i=1;i<ring.length;i++){const a=ring[i-1],b=ring[i];if(onEdge(p,a,b))return 0;if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside?1:-1;}
 export function geometryContains(geometry,p){return polygonParts(geometry).some(poly=>ringContains(p,poly[0])>=0&&!poly.slice(1).some(r=>ringContains(p,r)>=0));}
-// Deliberately reject absent units/reference, mixed historical limits, FL and UNL.
-// This app has no pressure-altitude -> geometric altitude adapter. Never label FL as MSL.
-export function parseAirspaceAltitude(raw){
+// Rendering-only interpretation. Original properties/labels remain untouched.
+export function parseAirspaceAltitude(raw,{unqualifiedMsl=false,upper=false}={}){
  const value=String(raw??'').trim().toUpperCase();
  if(['GND','SFC','GND/SFC','SFC/GND'].includes(value))return {reference:'AGL',feet:0};
- if(/^FL\s*\d/.test(value))throw Error('FL 기준의 기하고도 변환 어댑터 없음');
- if(value==='UNL')throw Error('UNL 상한에는 유한 3D 높이를 지정할 수 없음');
+ const fl=/^FL\s*(\d+(?:\.\d+)?)$/.exec(value);if(fl)return {reference:'FL',feet:Number(fl[1])*100};
+ if(value==='UNL'&&upper)return {reference:'UNL',feet:60000};
+ if(unqualifiedMsl&&/^\d[\d, ]*(?:\.\d+)?(?:\s*FT)?$/.test(value))return {reference:'MSL',feet:Number(value.replace(/FT|[ ,]/g,''))};
  const m=/^(\d[\d, ]*(?:\.\d+)?)\s*(?:FT\s*)?(AGL|AMSL|MSL)$/.exec(value);
  if(!m)throw Error(`단일 고도/단위/기준 해석 불가: ${raw??'NULL'}`);
  const feet=Number(m[1].replace(/[ ,]/g,''));if(!Number.isFinite(feet))throw Error('고도 숫자 오류');return {reference:m[2]==='AGL'?'AGL':'MSL',feet};
 }
-export function altitudeRange(properties){const lower=parseAirspaceAltitude(properties.lower_limit_raw),upper=parseAirspaceAltitude(properties.upper_limit_raw);if(lower.reference===upper.reference&&upper.feet<lower.feet)throw Error('상한이 하한보다 낮음');return {lower,upper};}
+export function altitudeRange(properties){
+ const lower=parseAirspaceAltitude(properties.lower_limit_raw),upper=parseAirspaceAltitude(properties.upper_limit_raw,{upper:true,unqualifiedMsl:String(properties.lower_limit_raw).trim().toUpperCase()==='GND'});
+ if(lower.reference===upper.reference&&upper.feet<lower.feet)throw Error('상한이 하한보다 낮음');return {lower,upper};
+}
+export function altitudeMeters(value,ground){return value.reference==='AGL'?(ground==null?null:ground+value.feet*.3048):value.feet*.3048;}
 function distance(a,b){return Math.hypot((a[0]-b[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),(a[1]-b[1])*111320);}
 // Tessellation changes rendering mesh only, never the data/source geometry.
 export function buildVolumeTopology(geometry,maxEdge=5000){
@@ -38,7 +42,7 @@ export function buildVolumeTopology(geometry,maxEdge=5000){
 export function resolveVolumeMesh(topology,range,terrain,mercator){
  const lower=[],upper=[];let floating=false;
  for(const [lon,lat] of topology.points){
-  const ground=terrain(lat,lon),height=value=>value.reference==='AGL'?(ground==null?null:ground+value.feet*.3048):value.feet*.3048;
+  const ground=terrain(lat,lon),height=value=>altitudeMeters(value,ground);
   const lo=height(range.lower),hi=height(range.upper);if(lo==null||hi==null)return {reason:'AGL 기준 DEM 미로드'};if(hi<lo)return {reason:'지형 참조 후 상하한 역전'};
   lower.push(mercator(lon,lat,lo));upper.push(mercator(lon,lat,hi));if(ground!=null&&lo>ground+.1)floating=true;
  }

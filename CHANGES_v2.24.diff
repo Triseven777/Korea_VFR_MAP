@@ -1,0 +1,327 @@
+--- v2.23/index.html
++++ v2.24/index.html
+@@ -3,7 +3,7 @@
+ <head>
+   <meta charset="utf-8" />
+   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+-  <title>KoreaVFR_v2.23</title>
++  <title>KoreaVFR_v2.24</title>
+   <link rel="stylesheet" href="./js/map/airspace-interaction.css" />
+   <link rel="stylesheet" href="./js/map/ats-class-layer.css" />
+ 
+@@ -1100,7 +1100,7 @@
+   <div id="atsClassControl"><button id="atsClassToggle" type="button" aria-pressed="true">ATS CLASS ON</button><span id="atsClassStatus">B/C/D · 로드 중</span></div>
+   <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
+   <div id="runtimeStatusBanner"></div>
+-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.23 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
++  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.24 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+ 
+   <div id="routeInfoShell" class="route-info-shell hidden">
+     <div class="route-info-panel">
+@@ -5468,7 +5468,7 @@
+         surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
+     }
+     const measureTool = mountMeasureDistance({map,maplibregl});
+-    const airspaceInteraction=createAirspaceInteraction({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2),adapters:{terrain:terrainElevationMeters,mercator:mercatorData,matrix:extractProjectionMatrix,linkProgram:linkRoute3DProgram}});
++    const airspaceInteraction=createAirspaceInteraction({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2),adapters:{terrain:terrainElevationMeters,mercator:mercatorData,matrix:extractProjectionMatrix,linkProgram:linkRoute3DProgram,getRoute:()=>route.map(p=>({latitude:p.latitude,longitude:p.longitude,altitudeFeet:routePointAltitudeFeet(p)??0})),interpolate:interpolateRouteLocation}});
+     const airspaceLayer=createAirspaceLayer({map,maplibregl,interaction:airspaceInteraction});
+     const atsClassLayer=createAtsClassLayer({map,maplibregl,interaction:airspaceInteraction});
+     const positionReport = mountPositionReport({
+--- v2.23/js/domain/airspace-visual-geometry.mjs
++++ v2.24/js/domain/airspace-visual-geometry.mjs
+@@ -3,18 +3,22 @@
+ function onEdge(p,a,b){const cross=(b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]);return Math.abs(cross)<1e-11&&p[0]>=Math.min(a[0],b[0])-1e-10&&p[0]<=Math.max(a[0],b[0])+1e-10&&p[1]>=Math.min(a[1],b[1])-1e-10&&p[1]<=Math.max(a[1],b[1])+1e-10;}
+ export function ringContains(p,ring){let inside=false;for(let i=1;i<ring.length;i++){const a=ring[i-1],b=ring[i];if(onEdge(p,a,b))return 0;if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])inside=!inside;}return inside?1:-1;}
+ export function geometryContains(geometry,p){return polygonParts(geometry).some(poly=>ringContains(p,poly[0])>=0&&!poly.slice(1).some(r=>ringContains(p,r)>=0));}
+-// Deliberately reject absent units/reference, mixed historical limits, FL and UNL.
+-// This app has no pressure-altitude -> geometric altitude adapter. Never label FL as MSL.
+-export function parseAirspaceAltitude(raw){
++// Rendering-only interpretation. Original properties/labels remain untouched.
++export function parseAirspaceAltitude(raw,{unqualifiedMsl=false,upper=false}={}){
+  const value=String(raw??'').trim().toUpperCase();
+  if(['GND','SFC','GND/SFC','SFC/GND'].includes(value))return {reference:'AGL',feet:0};
+- if(/^FL\s*\d/.test(value))throw Error('FL 기준의 기하고도 변환 어댑터 없음');
+- if(value==='UNL')throw Error('UNL 상한에는 유한 3D 높이를 지정할 수 없음');
++ const fl=/^FL\s*(\d+(?:\.\d+)?)$/.exec(value);if(fl)return {reference:'FL',feet:Number(fl[1])*100};
++ if(value==='UNL'&&upper)return {reference:'UNL',feet:60000};
++ if(unqualifiedMsl&&/^\d[\d, ]*(?:\.\d+)?(?:\s*FT)?$/.test(value))return {reference:'MSL',feet:Number(value.replace(/FT|[ ,]/g,''))};
+  const m=/^(\d[\d, ]*(?:\.\d+)?)\s*(?:FT\s*)?(AGL|AMSL|MSL)$/.exec(value);
+  if(!m)throw Error(`단일 고도/단위/기준 해석 불가: ${raw??'NULL'}`);
+  const feet=Number(m[1].replace(/[ ,]/g,''));if(!Number.isFinite(feet))throw Error('고도 숫자 오류');return {reference:m[2]==='AGL'?'AGL':'MSL',feet};
+ }
+-export function altitudeRange(properties){const lower=parseAirspaceAltitude(properties.lower_limit_raw),upper=parseAirspaceAltitude(properties.upper_limit_raw);if(lower.reference===upper.reference&&upper.feet<lower.feet)throw Error('상한이 하한보다 낮음');return {lower,upper};}
++export function altitudeRange(properties){
++ const lower=parseAirspaceAltitude(properties.lower_limit_raw),upper=parseAirspaceAltitude(properties.upper_limit_raw,{upper:true,unqualifiedMsl:String(properties.lower_limit_raw).trim().toUpperCase()==='GND'});
++ if(lower.reference===upper.reference&&upper.feet<lower.feet)throw Error('상한이 하한보다 낮음');return {lower,upper};
++}
++export function altitudeMeters(value,ground){return value.reference==='AGL'?(ground==null?null:ground+value.feet*.3048):value.feet*.3048;}
+ function distance(a,b){return Math.hypot((a[0]-b[0])*111320*Math.cos((a[1]+b[1])*Math.PI/360),(a[1]-b[1])*111320);}
+ // Tessellation changes rendering mesh only, never the data/source geometry.
+ export function buildVolumeTopology(geometry,maxEdge=5000){
+@@ -38,7 +42,7 @@
+ export function resolveVolumeMesh(topology,range,terrain,mercator){
+  const lower=[],upper=[];let floating=false;
+  for(const [lon,lat] of topology.points){
+-  const ground=terrain(lat,lon),height=value=>value.reference==='AGL'?(ground==null?null:ground+value.feet*.3048):value.feet*.3048;
++  const ground=terrain(lat,lon),height=value=>altitudeMeters(value,ground);
+   const lo=height(range.lower),hi=height(range.upper);if(lo==null||hi==null)return {reason:'AGL 기준 DEM 미로드'};if(hi<lo)return {reason:'지형 참조 후 상하한 역전'};
+   lower.push(mercator(lon,lat,lo));upper.push(mercator(lon,lat,hi));if(ground!=null&&lo>ground+.1)floating=true;
+  }
+--- v2.23/js/domain/airspace-route-overlap.mjs
++++ v2.24/js/domain/airspace-route-overlap.mjs
+@@ -0,0 +1,51 @@
++import {polygonParts,geometryContains,altitudeMeters} from './airspace-visual-geometry.mjs';
++const cross=(a,b)=>a[0]*b[1]-a[1]*b[0];
++export function segmentPolygonIntervals(a,b,geometry){
++ const d=[b[0]-a[0],b[1]-a[1]],cuts=[0,1];
++ for(const poly of polygonParts(geometry))for(const ring of poly)for(let i=1;i<ring.length;i++){
++  const c=ring[i-1],e=[ring[i][0]-c[0],ring[i][1]-c[1]],det=cross(d,e);if(Math.abs(det)<1e-15)continue;
++  const q=[c[0]-a[0],c[1]-a[1]],t=cross(q,e)/det,u=cross(q,d)/det;
++  if(t>0&&t<1&&u>=0&&u<=1)cuts.push(t);
++ }
++ const sorted=[...new Set(cuts.map(v=>Number(v.toFixed(12))))].sort((a,b)=>a-b),intervals=[];
++ for(let i=1;i<sorted.length;i++){const lo=sorted[i-1],hi=sorted[i],mid=(lo+hi)/2;if(hi-lo>1e-10&&geometryContains(geometry,[a[0]+d[0]*mid,a[1]+d[1]*mid]))intervals.push([lo,hi]);}return intervals;
++}
++function clipHeight(poly,limit,above){
++ const inside=p=>above?p[1]>=limit(p[0])-1e-8:p[1]<=limit(p[0])+1e-8,out=[];
++ for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length],ia=inside(a),ib=inside(b);if(ia)out.push(a);
++  if(ia!==ib){const fa=a[1]-limit(a[0]),fb=b[1]-limit(b[0]),t=fa/(fa-fb);out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);}}
++ return out;
++}
++export function verticalOverlapPolygon({ground0,ground1,air0,air1,lower0,lower1,upper0,upper1}){
++ if(![ground0,ground1,air0,air1,lower0,lower1,upper0,upper1].every(Number.isFinite))return [];
++ const min=Math.min(ground0,ground1,air0,air1),max=Math.max(ground0,ground1,air0,air1);
++ let p=[[0,min],[1,min],[1,max],[0,max]];
++ p=clipHeight(p,t=>ground0+(ground1-ground0)*t,true);if(p.length<3)return [];
++ p=clipHeight(p,t=>air0+(air1-air0)*t,false);if(p.length<3)return [];
++ p=clipHeight(p,t=>lower0+(lower1-lower0)*t,true);if(p.length<3)return [];
++ p=clipHeight(p,t=>upper0+(upper1-upper0)*t,false);if(p.length<3)return [];
++ const area=Math.abs(p.reduce((s,a,i)=>s+a[0]*p[(i+1)%p.length][1]-p[(i+1)%p.length][0]*a[1],0));return area>1e-6?p:[];
++}
++// Same source-over colour calculation as Custom FIX's curtain intersection pass.
++export function mixCurtainColor(color,alpha,curtain=[.06,.16,.30,.30]){
++ const rgb=color.match(/\w\w/g).map(v=>parseInt(v,16)/255),a=alpha+curtain[3]*(1-alpha);
++ return [...rgb.map((v,i)=>(v*alpha+curtain[i]*curtain[3]*(1-alpha))/a),a];
++}
++export function buildAirspaceCurtainOverlap(entry,route,{terrain,mercator,interpolate}){
++ const faces=[],lines=[];const push=(out,p)=>out.push(p.x,p.y,p.z);
++ for(let i=1;i<route.length;i++){
++  const a=route[i-1],b=route[i],distance=Math.hypot((b.longitude-a.longitude)*111320*Math.cos((a.latitude+b.latitude)*Math.PI/360),(b.latitude-a.latitude)*111320),count=Math.max(1,Math.ceil(distance/1000));
++  for(let j=0;j<count;j++){
++   const t0=j/count,t1=(j+1)/count,p0=interpolate(a,b,t0),p1=interpolate(a,b,t1);
++   for(const [u0,u1]of segmentPolygonIntervals([p0.longitude,p0.latitude],[p1.longitude,p1.latitude],entry.feature.geometry)){
++    const lo=t0+(t1-t0)*u0,hi=t0+(t1-t0)*u1,x=interpolate(a,b,lo),y=interpolate(a,b,hi),g0=terrain(x.latitude,x.longitude),g1=terrain(y.latitude,y.longitude);
++    if(g0==null||g1==null)continue;
++    const shape=verticalOverlapPolygon({ground0:g0,ground1:g1,air0:(a.altitudeFeet+(b.altitudeFeet-a.altitudeFeet)*lo)*.3048,air1:(a.altitudeFeet+(b.altitudeFeet-a.altitudeFeet)*hi)*.3048,lower0:altitudeMeters(entry.range.lower,g0),lower1:altitudeMeters(entry.range.lower,g1),upper0:altitudeMeters(entry.range.upper,g0),upper1:altitudeMeters(entry.range.upper,g1)});
++    const vertices=shape.map(([t,z])=>{const ll=interpolate(a,b,lo+(hi-lo)*t);return mercator(ll.longitude,ll.latitude,z);});
++    for(let k=1;k<vertices.length-1;k++)for(const v of [vertices[0],vertices[k],vertices[k+1]])push(faces,v);
++    for(let k=0;k<vertices.length;k++)for(const v of [vertices[k],vertices[(k+1)%vertices.length]])push(lines,v);
++   }
++  }
++ }
++ return {faces:new Float32Array(faces),lines:new Float32Array(lines)};
++}
+--- v2.23/js/map/airspace-interaction.mjs
++++ v2.24/js/map/airspace-interaction.mjs
+@@ -3,9 +3,9 @@
+ import {VISUAL_STYLE} from './airspace-visual-style.mjs';
+ export function createAirspaceInteraction({map,maplibregl,canInspect=()=>true,adapters}){
+  const entries=new Map(),groups=new Map();let selectedKey=null,popup=null,anchor=null;
+- const volumes=createAirspaceVolumes({map,adapters,onFloating:(entry,floating)=>map.setFeatureState({source:entry.source,id:entry.feature.id},{floating})});
++ const volumes=createAirspaceVolumes({map,adapters,onFloating:(entry,floating,volumeReady)=>{const original=entries.get(entry.key),changed=original?.floating!==floating||original?.volumeReady!==volumeReady;entry.floating=floating;entry.volumeReady=volumeReady;if(original)Object.assign(original,{floating,volumeReady});if(changed){map.setFeatureState({source:entry.source,id:entry.feature.id},{floating,volumeReady});if(selectedKey===entry.key)updateGroundStyles();}}});
+  function state(entry,selected){if(map.getSource(entry.source))map.setFeatureState({source:entry.source,id:entry.feature.id},{selected});}
+- function clear(){const previous=entries.get(selectedKey);if(previous)state(previous,false);selectedKey=null;const old=popup;popup=null;old?.remove();map.triggerRepaint();}
++ function clear(){const previous=entries.get(selectedKey);if(previous)state(previous,false);selectedKey=null;map.getSource('airspace-selection-source')?.setData?.({type:'FeatureCollection',features:[]});const old=popup;popup=null;old?.remove();map.triggerRepaint();}
+  function closePopup(){const old=popup;popup=null;old?.remove();}
+  function open(root,className=''){
+   const pixel=map.project?.(anchor),canvas=map.getCanvas?.();
+@@ -17,7 +17,7 @@
+  }
+  function select(key,location=anchor){
+   const entry=entries.get(key);if(!entry||!entry.isVisible())return false;
+-  const previous=entries.get(selectedKey);if(previous)state(previous,false);closePopup();selectedKey=key;anchor=location;state(entry,true);
++  const previous=entries.get(selectedKey);if(previous)state(previous,false);closePopup();selectedKey=key;anchor=location;state(entry,true);updateSelection(entry);
+   const p=entry.feature.properties,raw=entry.raw,root=document.createElement('section');root.className='airspace-popup-body';
+   const h=document.createElement('h2');h.textContent=p.name;root.appendChild(h);
+   const details=[['Type',entry.kind==='ats'?p.class:p.type],...(p.icao?[['ICAO',p.icao]]:[]),['Upper Limit',p.upper_limit_raw],['Lower Limit',p.lower_limit_raw],['Remarks',p.remarks??p.notes]];
+@@ -46,24 +46,52 @@
+   const candidates=candidatesAt(event.lngLat,event.point);clear();anchor=event.lngLat;
+   if(candidates.length===1)select(candidates[0].key);else if(candidates.length>1)showCandidates(candidates);
+  }
++ function ensureSelection(){
++  if(map.getSource('airspace-selection-source'))return;
++  map.addSource('airspace-selection-source',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
++  map.addLayer({id:'airspace-selection-fill',type:'fill',source:'airspace-selection-source',paint:{'fill-color':['get','selectionFillColor'],'fill-opacity':['get','selectionFillOpacity']}},map.getLayer('route-line')?'route-line':undefined);
++  map.addLayer({id:'airspace-selection-line',type:'line',source:'airspace-selection-source',paint:{'line-color':['get','selectionLineColor'],'line-opacity':1,'line-width':4}},map.getLayer('route-line')?'route-line':undefined);
++ }
++ function updateSelection(entry){
++  const lineId=entry.kind==='ats'?'ats-class-line':`airspace-${entry.feature.properties.type}-line`,fillId=entry.kind==='ats'?'ats-class-fill':`airspace-${entry.feature.properties.type}-fill`;
++  const lineColor=map.getPaintProperty?.(lineId,'line-color')??'#4DA3FF',fillColor=map.getPaintProperty?.(fillId,'fill-color')??lineColor;
++  map.getSource('airspace-selection-source')?.setData?.({type:'FeatureCollection',features:[{...entry.feature,properties:{...entry.feature.properties,selectionFillColor:fillColor,selectionLineColor:lineColor,selectionFillOpacity:entry.kind==='airspace'&&['P','R'].includes(entry.feature.properties.type)?.20:.18}}]});
++  updateGroundStyles();
++ }
+  function reorder(){
+   if(!map.moveLayer||!map.getStyle)return;
+   const all=map.getStyle().layers.map(l=>l.id),before=map.getLayer('route-line')?'route-line':undefined;
+-  // Every fill goes below every boundary. Class boundary above CTR, P/R above classes.
+   const order=['FIR','CTA','ACMI','AAR','HTA','MOA','CATA','A','TMA','CTR','ATS','D','R','P'];
+-  for(const suffix of ['shadow','fill','line'])for(const type of order){const id=type==='ATS'?`ats-class-${suffix}`:`airspace-${type}-${suffix}`;if(all.includes(id))map.moveLayer(id,before);}
++  for(const suffix of ['shadow','fill','line']){
++   for(const type of order){const id=type==='ATS'?`ats-class-${suffix}`:`airspace-${type}-${suffix}`;if(all.includes(id))map.moveLayer(id,before);}
++   const selected=`airspace-selection-${suffix}`;if(map.getLayer(selected))map.moveLayer(selected,before);
++  }
+   if(map.getLayer('airspace-volumes-3d'))map.moveLayer('airspace-volumes-3d',before);
+   for(const id of ['airspace-labels','ats-class-labels'])if(map.getLayer(id))map.moveLayer(id,before);
++  // The intersection pass must run after all existing curtain/FIX passes.
++  if(map.getLayer('airspace-route-overlap-3d'))map.moveLayer('airspace-route-overlap-3d');
++ }
++ function updateGroundStyles(){
++  const pitch=map.getPitch()>VISUAL_STYLE.topPitch;
++  for(const group of groups.values())for(const item of group.groundPaint??[]){
++   const opacity=pitch?['case',['all',['boolean',['feature-state','floating'],false],['boolean',['feature-state','volumeReady'],false]],0,item.opacity]:item.opacity;
++   map.setPaintProperty?.(item.id,item.property,opacity);
++  }
++  const entry=entries.get(selectedKey),hidden=pitch&&entry?.floating&&entry?.volumeReady;
++  if(map.getLayer('airspace-selection-fill'))map.setPaintProperty?.('airspace-selection-fill','fill-opacity',hidden?0:['get','selectionFillOpacity']);
++  if(map.getLayer('airspace-selection-line'))map.setPaintProperty?.('airspace-selection-line','line-opacity',hidden?0:1);
+  }
+  function updateShadows(){for(const [kind,group]of groups){const id=kind==='ats'?'ats-class-shadow':'airspace-volume-shadow';if(map.getLayer(id))map.setLayoutProperty(id,'visibility',group.isVisible()&&map.getPitch()>VISUAL_STYLE.topPitch?'visible':'none');}}
+  function register({kind,features,source,isVisible,repository}){
+-  groups.set(kind,{source,isVisible});const added=[];
++  const groundPaint=[];
++  for(const l of map.getStyle?.().layers??[]){if(l.source===source&&['line','fill'].includes(l.type)){const property=l.type==='line'?'line-opacity':'fill-opacity';groundPaint.push({id:l.id,property,opacity:map.getPaintProperty?.(l.id,property)??l.paint?.[property]??1});}}
++  groups.set(kind,{source,isVisible,groundPaint});ensureSelection();const added=[];
+   for(const feature of features){const key=`${kind}:${feature.id}`;if(entries.has(key))continue;const entry={key,kind,feature,source,isVisible,raw:repository.getById(feature.id),isSelected:()=>selectedKey===key};entries.set(key,entry);added.push(entry);}
+   const id=kind==='ats'?'ats-class-shadow':'airspace-volume-shadow';
+   if(!map.getLayer(id))map.addLayer({id,type:'fill',source,filter:kind==='ats'?['in',['get','class'],['literal',['B','C','D']]]:['in',['get','type'],['literal',['P','R']]],paint:{'fill-color':'#000000','fill-opacity':['case',['boolean',['feature-state','floating'],false],VISUAL_STYLE.shadow,0]}},map.getLayer('route-line')?'route-line':undefined);
+-  volumes.add(added);reorder();updateShadows();
++  volumes.add(added);reorder();updateShadows();updateGroundStyles();
+  }
+- function visibilityChanged(){const entry=entries.get(selectedKey);if(entry&&!entry.isVisible())clear();else if(popup&&!selectedKey)clear();updateShadows();volumes.invalidate();}
+- map.on('click',inspect);map.on('pitch',updateShadows);
++ function visibilityChanged(){const entry=entries.get(selectedKey);if(entry&&!entry.isVisible())clear();else if(popup&&!selectedKey)clear();updateShadows();updateGroundStyles();volumes.invalidate();}
++ map.on('click',inspect);map.on('pitch',()=>{updateShadows();updateGroundStyles();});
+  return {register,visibilityChanged,clear,select,candidatesAt,getSelected:()=>selectedKey,get3DStatus:volumes.getStatus,getDiagnostics:volumes.getDiagnostics};
+ }
+--- v2.23/js/map/airspace-volume-layer.mjs
++++ v2.24/js/map/airspace-volume-layer.mjs
+@@ -1,54 +1,55 @@
+ import {altitudeRange,buildVolumeTopology,resolveVolumeMesh,triangleContains} from '../domain/airspace-visual-geometry.mjs';
++import {buildAirspaceCurtainOverlap,mixCurtainColor} from '../domain/airspace-route-overlap.mjs';
+ import {VISUAL_STYLE,visualStyle} from './airspace-visual-style.mjs';
+ export function createAirspaceVolumes({map,adapters,onFloating=()=>{}}){
+- const records=new Map(),diagnostics=new Map();let dirty=true,matrix=null,layer=null;
++ const records=new Map(),diagnostics=new Map();let dirty=true,matrix=null,layer=null,gpu=null,lastRoute='';
+  const diagnostic=(entry,reason)=>{const key=entry.key+':'+reason;if(diagnostics.has(key))return;diagnostics.set(key,{id:entry.feature.id,name:entry.feature.properties.name,kind:entry.kind,reason});console.warn('[Airspace 3D]',diagnostics.get(key));};
+  function add(entries){for(const entry of entries){const type=entry.kind==='ats'?entry.feature.properties.class:entry.feature.properties.type;if(!(entry.kind==='ats'?['B','C','D'].includes(type):['P','R'].includes(type)))continue;try{records.set(entry.key,{...entry,range:altitudeRange(entry.feature.properties),topology:buildVolumeTopology(entry.feature.geometry),mesh:null});}catch(error){diagnostic(entry,error.message);}}dirty=true;ensureLayer();}
+- function ensureLayer(){if(layer||!adapters)return;layer={id:'airspace-volumes-3d',type:'custom',renderingMode:'3d',
+-  onAdd(instance,gl){this.program=adapters.linkProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;uniform vec4 u_color;out vec4 fragColor;void main(){fragColor=u_color;}`);this.buffer=gl.createBuffer();this.vao=gl.createVertexArray();},
+-  render(gl,options){
+-   matrix=adapters.matrix(options);if(!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return;
+-   const bounds=map.getBounds();
+-   if(dirty){for(const entry of records.values()){
+-    if(!entry.isVisible()){entry.mesh=null;continue;}
+-    // Broad phase bounds culls terrain queries for far-away volumes.
++ function updateGeometry(){
++  const route=adapters.getRoute?.()??[],signature=JSON.stringify(route),routeChanged=signature!==lastRoute;
++  if(!dirty&&!routeChanged)return;const bounds=map.getBounds();
++  for(const entry of records.values()){
++   if(dirty){
++    const inView=entry.isVisible()&&entry.topology.points.some(p=>p[0]>=bounds.getWest()&&p[0]<=bounds.getEast()&&p[1]>=bounds.getSouth()&&p[1]<=bounds.getNorth());
++    // Bounding boxes also cover a viewport fully contained in a large volume.
+     const xs=entry.topology.points.map(p=>p[0]),ys=entry.topology.points.map(p=>p[1]);
+-    entry.inView=!(Math.max(...xs)<bounds.getWest()||Math.min(...xs)>bounds.getEast()||Math.max(...ys)<bounds.getSouth()||Math.min(...ys)>bounds.getNorth());
+-    if(!entry.inView){entry.mesh=null;continue;}
++    entry.inView=inView||entry.isVisible()&&!(Math.max(...xs)<bounds.getWest()||Math.min(...xs)>bounds.getEast()||Math.max(...ys)<bounds.getSouth()||Math.min(...ys)>bounds.getNorth());
++    if(!entry.inView){entry.mesh=null;entry.overlap=null;onFloating(entry,false,false);continue;}
+     entry.mesh=resolveVolumeMesh(entry.topology,entry.range,adapters.terrain,adapters.mercator);
+-    if(entry.mesh.reason)diagnostic(entry,entry.mesh.reason);onFloating(entry,!!entry.mesh.floating&&!entry.mesh.reason);
+-   }dirty=false;}
+-   const previous={program:gl.getParameter(gl.CURRENT_PROGRAM),vao:gl.getParameter(gl.VERTEX_ARRAY_BINDING),buffer:gl.getParameter(gl.ARRAY_BUFFER_BINDING),depth:gl.isEnabled(gl.DEPTH_TEST),cull:gl.isEnabled(gl.CULL_FACE),blend:gl.isEnabled(gl.BLEND),mask:gl.getParameter(gl.DEPTH_WRITEMASK),src:gl.getParameter(gl.BLEND_SRC_RGB),dst:gl.getParameter(gl.BLEND_DST_RGB),srcA:gl.getParameter(gl.BLEND_SRC_ALPHA),dstA:gl.getParameter(gl.BLEND_DST_ALPHA)};
+-   try{
+-    gl.useProgram(this.program);gl.bindVertexArray(this.vao);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);const location=gl.getAttribLocation(this.program,'a_pos');gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(gl.getUniformLocation(this.program,'u_matrix'),false,matrix);
+-    // Match Custom FIX: terrain cannot punch holes into the translucent cap.
+-    // Source-over blending makes overlapping volumes visibly accumulate/mix.
+-    gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
+-    for(const entry of records.values()){
+-     if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;
+-     const s=visualStyle(entry.kind,entry.feature.properties.type),rgb=s.color.match(/\w\w/g).map(v=>parseInt(v,16)/255),selected=entry.isSelected();
+-     for(const [vertices,alpha,mode] of [[entry.mesh.walls,selected?s.selectedWall:s.wall,gl.TRIANGLES],[entry.mesh.caps,selected?s.selectedCap:s.cap,gl.TRIANGLES],[entry.mesh.outlines,selected?s.selectedLine:s.line,gl.LINES]]){
+-      gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);gl.uniform4f(gl.getUniformLocation(this.program,'u_color'),...rgb,alpha);gl.drawArrays(mode,0,vertices.length/3);
+-     }
+-    }
+-   }finally{
+-    gl.depthMask(previous.mask);for(const [flag,on]of [[gl.DEPTH_TEST,previous.depth],[gl.CULL_FACE,previous.cull],[gl.BLEND,previous.blend]])on?gl.enable(flag):gl.disable(flag);
+-    gl.blendFuncSeparate(previous.src,previous.dst,previous.srcA,previous.dstA);gl.bindVertexArray(previous.vao);gl.bindBuffer(gl.ARRAY_BUFFER,previous.buffer);gl.useProgram(previous.program);
++    if(entry.mesh.reason)diagnostic(entry,entry.mesh.reason);onFloating(entry,!!entry.mesh.floating&&!entry.mesh.reason,!entry.mesh.reason);
+    }
+-  },onRemove(instance,gl){gl.deleteBuffer(this.buffer);gl.deleteProgram(this.program);gl.deleteVertexArray(this.vao);}
+- };map.addLayer(layer,map.getLayer('airspace-labels')?'airspace-labels':map.getLayer('route-line')?'route-line':undefined);}
++   if(entry.mesh&&!entry.mesh.reason&&adapters.interpolate)entry.overlap=buildAirspaceCurtainOverlap(entry,route,adapters);
++  }
++  lastRoute=signature;dirty=false;
++ }
++ function draw(gl,options,overlap){
++  matrix=adapters.matrix(options);if(!gpu||!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return;updateGeometry();
++  const previous={program:gl.getParameter(gl.CURRENT_PROGRAM),vao:gl.getParameter(gl.VERTEX_ARRAY_BINDING),buffer:gl.getParameter(gl.ARRAY_BUFFER_BINDING),depth:gl.isEnabled(gl.DEPTH_TEST),cull:gl.isEnabled(gl.CULL_FACE),blend:gl.isEnabled(gl.BLEND),mask:gl.getParameter(gl.DEPTH_WRITEMASK),src:gl.getParameter(gl.BLEND_SRC_RGB),dst:gl.getParameter(gl.BLEND_DST_RGB),srcA:gl.getParameter(gl.BLEND_SRC_ALPHA),dstA:gl.getParameter(gl.BLEND_DST_ALPHA)};
++  try{
++   gl.useProgram(gpu.program);gl.bindVertexArray(gpu.vao);gl.bindBuffer(gl.ARRAY_BUFFER,gpu.buffer);const location=gl.getAttribLocation(gpu.program,'a_pos');gl.enableVertexAttribArray(location);gl.vertexAttribPointer(location,3,gl.FLOAT,false,0,0);gl.uniformMatrix4fv(gl.getUniformLocation(gpu.program,'u_matrix'),false,matrix);
++   gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);
++   for(const entry of records.values()){
++    if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;const s=visualStyle(entry.kind,entry.feature.properties.type),selected=entry.isSelected(),rgb=s.color.match(/\w\w/g).map(v=>parseInt(v,16)/255),wall=selected?s.selectedWall:s.wall;
++    const batches=overlap?entry.overlap?[[entry.overlap.faces,mixCurtainColor(s.color,wall),gl.TRIANGLES],[entry.overlap.lines,[...rgb,1],gl.LINES]]:[]:[[entry.mesh.walls,[...rgb,wall],gl.TRIANGLES],[entry.mesh.caps,[...rgb,selected?s.selectedCap:s.cap],gl.TRIANGLES],[entry.mesh.outlines,[...rgb,selected?s.selectedLine:s.line],gl.LINES]];
++    for(const [vertices,color,mode]of batches){if(!vertices.length)continue;gl.bufferData(gl.ARRAY_BUFFER,vertices,gl.DYNAMIC_DRAW);gl.uniform4f(gl.getUniformLocation(gpu.program,'u_color'),...color);gl.drawArrays(mode,0,vertices.length/3);}
++   }
++  }finally{
++   gl.depthMask(previous.mask);for(const [flag,on]of [[gl.DEPTH_TEST,previous.depth],[gl.CULL_FACE,previous.cull],[gl.BLEND,previous.blend]])on?gl.enable(flag):gl.disable(flag);gl.blendFuncSeparate(previous.src,previous.dst,previous.srcA,previous.dstA);gl.bindVertexArray(previous.vao);gl.bindBuffer(gl.ARRAY_BUFFER,previous.buffer);gl.useProgram(previous.program);
++  }
++ }
++ function ensureLayer(){if(layer||!adapters)return;layer={id:'airspace-volumes-3d',type:'custom',renderingMode:'3d',onAdd(instance,gl){gpu={program:adapters.linkProgram(gl,`#version 300 es\nprecision highp float;uniform mat4 u_matrix;in vec3 a_pos;void main(){gl_Position=u_matrix*vec4(a_pos,1.0);}`,`#version 300 es\nprecision highp float;uniform vec4 u_color;out vec4 fragColor;void main(){fragColor=u_color;}`),buffer:gl.createBuffer(),vao:gl.createVertexArray()};},render:(gl,options)=>draw(gl,options,false),onRemove(instance,gl){gl.deleteBuffer(gpu.buffer);gl.deleteProgram(gpu.program);gl.deleteVertexArray(gpu.vao);gpu=null;}};
++  map.addLayer(layer,map.getLayer('airspace-labels')?'airspace-labels':map.getLayer('route-line')?'route-line':undefined);
++  // A second pass AFTER the existing route/FIX curtain passes, like Custom FIX's
++  // intersection enhancement. Share the same GPU resources; no duplicate mesh engine.
++  map.addLayer({id:'airspace-route-overlap-3d',type:'custom',renderingMode:'3d',render:(gl,options)=>draw(gl,options,true)});
++ }
+  function invalidate(){dirty=true;map.triggerRepaint();}
+  for(const name of ['moveend','pitchend','idle'])map.on(name,()=>{if(name!=='idle'||dirty)invalidate();});
+  map.on('sourcedata',e=>{if(e.sourceId==='terrainSource'&&e.isSourceLoaded)invalidate();});
+  function screenHits(point){
+-  if(!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return [];
+-  const canvas=map.getCanvas(),width=canvas.clientWidth,height=canvas.clientHeight;
+-  const project=(data,i)=>{const x=data[i],y=data[i+1],z=data[i+2],w=matrix[3]*x+matrix[7]*y+matrix[11]*z+matrix[15];if(w<=0)return null;return {x:(matrix[0]*x+matrix[4]*y+matrix[8]*z+matrix[12])/w*width/2+width/2,y:height/2-(matrix[1]*x+matrix[5]*y+matrix[9]*z+matrix[13])/w*height/2};};
+-  const result=[];
+-  for(const entry of records.values()){if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;let found=false;
+-   for(const data of [entry.mesh.walls,entry.mesh.caps]){for(let i=0;i<data.length;i+=9){const a=project(data,i),b=project(data,i+3),c=project(data,i+6);if(a&&b&&c&&triangleContains(point,a,b,c)){found=true;break;}}if(found)break;}
+-   if(found)result.push(entry.key);
+-  }return result;
++  if(!matrix||map.getPitch()<=VISUAL_STYLE.topPitch)return [];const canvas=map.getCanvas(),width=canvas.clientWidth,height=canvas.clientHeight;
++  const project=(data,i)=>{const x=data[i],y=data[i+1],z=data[i+2],w=matrix[3]*x+matrix[7]*y+matrix[11]*z+matrix[15];if(w<=0)return null;return {x:(matrix[0]*x+matrix[4]*y+matrix[8]*z+matrix[12])/w*width/2+width/2,y:height/2-(matrix[1]*x+matrix[5]*y+matrix[9]*z+matrix[13])/w*height/2};};const result=[];
++  for(const entry of records.values()){if(!entry.isVisible()||!entry.mesh||entry.mesh.reason)continue;let found=false;for(const data of [entry.mesh.walls,entry.mesh.caps]){for(let i=0;i<data.length;i+=9){const a=project(data,i),b=project(data,i+3),c=project(data,i+6);if(a&&b&&c&&triangleContains(point,a,b,c)){found=true;break;}}if(found)break;}if(found)result.push(entry.key);}return result;
+  }
+- return {add,invalidate,screenHits,getDiagnostics:()=>[...diagnostics.values()],getStatus:()=>({eligible:records.size,drawn:map.getPitch()<=VISUAL_STYLE.topPitch?0:[...records.values()].filter(e=>e.isVisible()&&e.mesh&&!e.mesh.reason).length,diagnostics:[...diagnostics.values()]})};
++ return {add,invalidate,screenHits,getDiagnostics:()=>[...diagnostics.values()],getStatus:()=>({eligible:records.size,drawn:map.getPitch()<=VISUAL_STYLE.topPitch?0:[...records.values()].filter(e=>e.isVisible()&&e.mesh&&!e.mesh.reason).length,overlapTriangles:[...records.values()].reduce((n,e)=>n+(e.overlap?.faces.length??0)/9,0),diagnostics:[...diagnostics.values()]})};
+ }
+--- v2.23/js/map/airspace-visual-style.mjs
++++ v2.24/js/map/airspace-visual-style.mjs
+@@ -2,8 +2,8 @@
+ export const CTR_COLOR='#4DA3FF',PROHIBITED_COLOR='#FF303D';
+ export const VISUAL_STYLE=Object.freeze({
+  class:{color:CTR_COLOR,line:.95,fill:.12,selectedLine:1,selectedFill:.28,wall:.22,cap:.13,selectedWall:.42,selectedCap:.30},
+- restricted:{color:PROHIBITED_COLOR,line:1,fill:.20,selectedLine:1,selectedFill:.40,wall:.26,cap:.16,selectedWall:.48,selectedCap:.34},
+- tmaLine:'#A95B4B',shadow:.30,topPitch:5
++ restricted:{color:PROHIBITED_COLOR,line:.90,fill:.20,selectedLine:1,selectedFill:.40,wall:.26,cap:.16,selectedWall:.48,selectedCap:.34},
++ defaultLine:.90,tmaLine:'#A95B4B',shadow:.30,topPitch:5
+ });
+ export function visualStyle(kind,type){return kind==='ats'?VISUAL_STYLE.class:['P','R'].includes(type)?VISUAL_STYLE.restricted:null;}
+ export const selectedOpacity=(normal,selected)=>['case',['boolean',['feature-state','selected'],false],selected,normal];
+--- v2.23/js/map/airspace-layer.mjs
++++ v2.24/js/map/airspace-layer.mjs
+@@ -30,7 +30,7 @@
+    for(const type of AIRSPACE_ORDER){
+     const s=AIRSPACE_STYLE[type],filter=['==',['get','type'],type];
+     if(s.opacity){const id=`airspace-${type}-fill`;map.addLayer({id,type:'fill',source:'airspace-source',filter,paint:{'fill-color':s.color,'fill-opacity':selectedOpacity(s.opacity,visualStyle('airspace',type)?.selectedFill??Math.min(.4,s.opacity+.15)),'fill-antialias':true}},before);ids.push(id);hitLayers.push(id);}
+-    const id=`airspace-${type}-line`;const paint={'line-color':s.lineColor??s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(1,1)};if(s.dash)paint['line-dasharray']=s.dash;
++    const id=`airspace-${type}-line`;const paint={'line-color':s.lineColor??s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(visualStyle('airspace',type)?.line??VISUAL_STYLE.defaultLine,1)};if(s.dash)paint['line-dasharray']=s.dash;
+     map.addLayer({id,type:'line',source:'airspace-source',filter,paint,layout:{'line-join':'round','line-cap':'butt'}},before);ids.push(id);hitLayers.push(id);
+    }
+    // One symbol layer gives collision priority consistently across all types.

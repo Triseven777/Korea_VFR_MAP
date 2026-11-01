@@ -1,18 +1,12 @@
-# v2.22 → v2.23 필수 런타임 파일
+# v2.23 → v2.24
 
-기존 파일 덮어쓰기:
+필수 런타임 파일 7개:
 - index.html
-- js/map/airspace-layer.mjs
-- js/map/ats-class-layer.mjs
-- js/data/ats-class-repository.mjs
-
-신규 파일 추가:
-- js/map/airspace-visual-style.mjs
-- js/map/airspace-interaction.mjs
-- js/map/airspace-interaction.css
-- js/map/airspace-volume-layer.mjs
 - js/domain/airspace-visual-geometry.mjs
-- js/vendor/earcut.mjs
-- js/vendor/earcut-LICENSE
+- js/domain/airspace-route-overlap.mjs
+- js/map/airspace-interaction.mjs
+- js/map/airspace-volume-layer.mjs
+- js/map/airspace-visual-style.mjs
+- js/map/airspace-layer.mjs
 
-DB, data/, assets/ 및 다른 UI 모듈을 덮어쓸 필요가 없습니다.
+새 파일은 js/domain/airspace-route-overlap.mjs, 나머지는 덮어쓰기입니다. DB/data/assets와 다른 기능 파일은 덮어쓸 필요가 없습니다.

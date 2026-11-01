@@ -12,9 +12,9 @@ test('style uses actual CTR/P palette, TMA line only, stronger fills and selecte
 test('geometry containment respects exclusions, composite components, boundary and unchanged data',()=>{
  const before=JSON.stringify(hole);assert.ok(geometryContains(hole,[127.02,37.02]));assert.equal(geometryContains(hole,[127.05,37.05]),false);assert.equal(geometryContains(hole,[127.03,37.05]),false);assert.equal(geometryContains(square,[127.2,37]),false);assert.ok(geometryContains({type:'MultiPolygon',coordinates:[hole.coordinates,[ring(128,38,128.1,38.1)]]},[128.05,38.05]));assert.equal(JSON.stringify(hole),before);
 });
-test('altitude references remain explicit: AGL/MSL resolved, ambiguous/FL/UNL rejected',()=>{
+test('altitude references remain explicit: AGL/MSL resolved, render-only FL and upper UNL supported; ambiguous values rejected',()=>{
  assert.deepEqual(parseAirspaceAltitude('SFC'),{reference:'AGL',feet:0});assert.deepEqual(parseAirspaceAltitude('1,000 ft AGL'),{reference:'AGL',feet:1000});assert.deepEqual(parseAirspaceAltitude('5 000 ft AMSL'),{reference:'MSL',feet:5000});
- for(const value of ['FL150','UNL','5000','FL400; FL500',null,'1000 M'])assert.throws(()=>parseAirspaceAltitude(value));assert.throws(()=>altitudeRange({lower_limit_raw:'5000 ft MSL',upper_limit_raw:'1000 ft MSL'}));
+ for(const value of ['UNL','5000','FL400; FL500',null,'1000 M'])assert.throws(()=>parseAirspaceAltitude(value));assert.throws(()=>altitudeRange({lower_limit_raw:'5000 ft MSL',upper_limit_raw:'1000 ft MSL'}));
 });
 test('cap triangulation preserves holes; wall edges include internal boundary; mesh does not mutate source',()=>{
  const before=JSON.stringify(hole),topology=buildVolumeTopology(hole,50000);let area=0;
@@ -29,12 +29,12 @@ test('MSL top/bottom stay at their altitude even when terrain is higher; screen 
 });
 class El{constructor(tag){this.tag=tag;this.children=[];this.dataset={};this.events={};}append(...xs){this.children.push(...xs);}appendChild(x){this.append(x);}setAttribute(k,v){this[k]=v;}addEventListener(k,f){this.events[k]=f;}}
 function harness(){
- const layers=[{id:'airspace-CTR-fill'},{id:'airspace-CTR-line'},{id:'airspace-R-fill'},{id:'airspace-R-line'},{id:'airspace-labels'},{id:'ats-class-fill'},{id:'ats-class-line'},{id:'ats-class-labels'},{id:'route-line'},{id:'route-hit'}],sources=new Set(['airspace-source','ats-class-source']),states=[],events={},popups=[];let pitch=0,guard=true,routeHit=false;
- const map={getLayer:id=>layers.find(l=>l.id===id),getSource:id=>sources.has(id),getStyle:()=>({layers}),addLayer:(l,b)=>{const i=layers.findIndex(x=>x.id===b);layers.splice(i<0?layers.length:i,0,l);},moveLayer:(id,b)=>{const i=layers.findIndex(x=>x.id===id),l=layers.splice(i,1)[0],j=layers.findIndex(x=>x.id===b);layers.splice(j<0?layers.length:j,0,l);},on:(k,f)=>(events[k]??=[]).push(f),setLayoutProperty(){},setFeatureState:(f,v)=>states.push({f,v}),getPitch:()=>pitch,triggerRepaint(){},queryRenderedFeatures:()=>routeHit?[{}]:[]};
+ const layers=[{id:'airspace-CTR-fill'},{id:'airspace-CTR-line'},{id:'airspace-R-fill'},{id:'airspace-R-line'},{id:'airspace-labels'},{id:'ats-class-fill'},{id:'ats-class-line'},{id:'ats-class-labels'},{id:'route-line'},{id:'route-hit'}],sources=new Set(['airspace-source','ats-class-source']),states=[],events={},popups=[];const selectionUpdates=[],paintChanges=[];let pitch=0,guard=true,routeHit=false;
+ const map={getLayer:id=>layers.find(l=>l.id===id),getSource:id=>sources.has(id)?{setData(data){selectionUpdates.push({id,data});}}:undefined,addSource:(id,s)=>sources.add(id),getStyle:()=>({layers}),addLayer:(l,b)=>{const i=layers.findIndex(x=>x.id===b);layers.splice(i<0?layers.length:i,0,l);},moveLayer:(id,b)=>{const i=layers.findIndex(x=>x.id===id),l=layers.splice(i,1)[0],j=layers.findIndex(x=>x.id===b);layers.splice(j<0?layers.length:j,0,l);},on:(k,f)=>(events[k]??=[]).push(f),setLayoutProperty(){},setPaintProperty:(id,key,value)=>paintChanges.push({id,key,value}),setFeatureState:(f,v)=>states.push({f,v}),getPitch:()=>pitch,triggerRepaint(){},queryRenderedFeatures:()=>routeHit?[{}]:[]};
  class Popup{constructor(options){assert.ok(options.className.split(' ').every(Boolean),'Popup CSS class contains an empty token');this.options=options;this.events={};popups.push(this);}setLngLat(){return this;}setDOMContent(root){this.root=root;return this;}addTo(){return this;}on(k,f){this.events[k]=f;return this;}remove(){this.removed=true;this.events.close?.();}}
  const controller=createAirspaceInteraction({map,maplibregl:{Popup},canInspect:()=>guard});
  let visible=true;const register=(kind,features)=>controller.register({kind,features,source:kind==='ats'?'ats-class-source':'airspace-source',isVisible:()=>visible,repository:{getById:id=>features.find(f=>f.id===id)?.properties}});
- return {map,layers,states,events,popups,controller,register,setGuard:v=>guard=v,setRouteHit:v=>routeHit=v,setVisible:v=>visible=v,setPitch:v=>pitch=v};
+ return {map,layers,states,events,popups,selectionUpdates,paintChanges,controller,register,setGuard:v=>guard=v,setRouteHit:v=>routeHit=v,setVisible:v=>visible=v,setPitch:v=>pitch=v};
 }
 function withDom(fn){const old=globalThis.document;globalThis.document={createElement:tag=>new El(tag)};try{fn();}finally{globalThis.document=old;}}
 test('shared click collector lists unique namespace+id candidates; Name/Type dropdown; selection and close restore state',()=>withDom(()=>{
@@ -60,4 +60,13 @@ test('3D target filter supports bounded P and R plus B/C/D, excludes Class A and
 test('Class A 2D is supported separately from Alert A without adding records to the DB',async()=>{
  const {isAtsMapVolume}=await import('../js/data/ats-class-repository.mjs');const {buildAtsClassGeoJson}=await import('../js/domain/ats-class-geometry.mjs');
  const row={record_type:'ATS_CLASS_VOLUME',class:'A',name:'Fixture Class A',geometry_type:'CIRCLE',geometry_spec:JSON.stringify({op:'CIRCLE',center:'370000N 1270000E',radius_nm:5}),lower_limit_raw:'1000 ft AMSL',upper_limit_raw:'5000 ft AMSL'};assert.ok(isAtsMapVolume(row));assert.equal(buildAtsClassGeoJson([row]).geojson.features.length,1);assert.equal(AIRSPACE_STYLE.A.color,'#D99A42');
+});
+
+test('selection updates a dedicated overlay for both single and dropdown paths, then empties on clear',()=>withDom(()=>{
+ const h=harness();h.register('airspace',[feature('r','R')]);h.events.click[0]({lngLat:{lng:127.02,lat:37.02},point:{x:1,y:1}});
+ const update=h.selectionUpdates.at(-1);assert.equal(update.id,'airspace-selection-source');assert.equal(update.data.features[0].id,'r');assert.equal(update.data.features[0].properties.selectionFillOpacity,.20);assert.ok(h.paintChanges.some(p=>p.id==='airspace-selection-line'&&p.value===1));
+ h.controller.clear();assert.equal(h.selectionUpdates.at(-1).data.features.length,0);
+}));
+test('normal and selected line opacity have numerical headroom for all target types',()=>{
+ assert.ok(VISUAL_STYLE.defaultLine<1);assert.ok(VISUAL_STYLE.restricted.line<VISUAL_STYLE.restricted.selectedLine);assert.ok(VISUAL_STYLE.class.line<VISUAL_STYLE.class.selectedLine);
 });

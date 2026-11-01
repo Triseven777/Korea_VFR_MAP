@@ -1,7 +1,7 @@
-# KoreaVFR_v2.23
+# KoreaVFR_v2.24
 
-v2.22 기반 공역 시각화/중첩 선택/3D 변경. DB 및 기존 geometry는 그대로입니다.
-기존 v2.22 GitHub 저장소에는 UPDATE.zip의 11개 런타임 파일만 적용하세요. 정확한 목록: UPDATE_FILES.md.
-전체 코드 및 테스트/색상표/3D 제외 49개: VISUALIZATION_REPORT.md 및 qa/.
-테스트: node --test tests/*.test.mjs — 89 pass.
-3D: 높이 해석 가능한 ATS52 + R15만 허용, UNL/FL/모호한 고도는 2D 유지. P73은 UNL. iPad Safari·실제 지형 QA는 별도입니다.
+v2.23 기반 공역 3D/Selection 추가 수정. 원본 DB·geometry 유지.
+FL×100ft / UNL upper60000ft / GND+무단위상한MSL / 떠 있는 지면선 숨김 / 선택 overlay / route curtain intersection.
+3D 높이 해석114개, 고도 부족2개 2D유지. 테스트100 pass.
+상세: FOLLOWUP_v2.24_REPORT.md. TMA 세 번째 이미지 미첨부로 색조보류, iPad Safari 실기기 QA미완료.
+기존 v2.23에 UPDATE.zip의 7개 파일만 적용하세요.

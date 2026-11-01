@@ -30,7 +30,7 @@ export function createAirspaceLayer({map,maplibregl,canInspect=()=>true,reposito
    for(const type of AIRSPACE_ORDER){
     const s=AIRSPACE_STYLE[type],filter=['==',['get','type'],type];
     if(s.opacity){const id=`airspace-${type}-fill`;map.addLayer({id,type:'fill',source:'airspace-source',filter,paint:{'fill-color':s.color,'fill-opacity':selectedOpacity(s.opacity,visualStyle('airspace',type)?.selectedFill??Math.min(.4,s.opacity+.15)),'fill-antialias':true}},before);ids.push(id);hitLayers.push(id);}
-    const id=`airspace-${type}-line`;const paint={'line-color':s.lineColor??s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(1,1)};if(s.dash)paint['line-dasharray']=s.dash;
+    const id=`airspace-${type}-line`;const paint={'line-color':s.lineColor??s.color,'line-width':['case',['boolean',['feature-state','selected'],false],s.width+1.5,s.width],'line-opacity':selectedOpacity(visualStyle('airspace',type)?.line??VISUAL_STYLE.defaultLine,1)};if(s.dash)paint['line-dasharray']=s.dash;
     map.addLayer({id,type:'line',source:'airspace-source',filter,paint,layout:{'line-join':'round','line-cap':'butt'}},before);ids.push(id);hitLayers.push(id);
    }
    // One symbol layer gives collision priority consistently across all types.

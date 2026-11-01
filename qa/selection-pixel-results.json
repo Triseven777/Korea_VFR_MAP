@@ -1,0 +1,12 @@
+{
+  "crop": [
+    610,
+    380,
+    760,
+    530
+  ],
+  "changed_pixels": 19200,
+  "total_pixels": 22500,
+  "mean_channel_difference": 15.400014814814813,
+  "popup_hidden_for_measurement": true
+}
