@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.24</title>
+  <title>KoreaVFR_v2.25</title>
+  <link rel="stylesheet" href="./js/first-via-picker.css" />
   <link rel="stylesheet" href="./js/map/airspace-interaction.css" />
   <link rel="stylesheet" href="./js/map/ats-class-layer.css" />
 
@@ -70,7 +71,6 @@
       }
 
       .popup-btn,
-      .same-point-btn,
       .route-delete-btn {
         min-height: 44px;
       }
@@ -631,19 +631,7 @@
       margin-left: auto;
     }
 
-    .same-point-btn {
-      width: 100%;
-      margin: 0 0 10px 0;
-      padding: 9px 10px;
-      border: 1px solid rgba(255,255,255,.28);
-      border-radius: 6px;
-      background: rgba(70,120,210,.95);
-      color: #fff;
-      font-weight: 700;
-      cursor: pointer;
-    }
 
-    .same-point-btn[hidden] { display: none; }
 
     /* ===== Aircraft / navigation controls ===== */
     .aircraft-marker {
@@ -1055,7 +1043,7 @@
     .popup-head,#fixPopup strong {font-size:20px;font-weight:700;}
     .popup-input,#fixPopup input,#posSelect,#pressureFields input {background:var(--input-bg);border:var(--ui-border);color:var(--primary-text);border-radius:12px;min-height:44px;font-variant-numeric:tabular-nums;}
     .popup-input,#fixPopup input {font-size:18px;}
-    .popup-btn,.airport-popup-action,.same-point-btn {min-width:44px;min-height:44px;border:var(--ui-border);border-radius:12px;font-weight:700;}
+    .popup-btn,.airport-popup-action {min-width:44px;min-height:44px;border:var(--ui-border);border-radius:12px;font-weight:700;}
     .popup-save {background:var(--ui-badge-bg);}.popup-delete {background:var(--danger-bg);}
     #popupClose,#fixClose,#posClose,#pressureClose,.airport-popup .maplibregl-popup-close-button {width:44px;min-width:44px;height:44px;border:var(--ui-border);border-radius:50%;background:#343b46;color:white;font-size:28px;}
     #fixPopup label {margin-top:14px;color:var(--secondary-text);font-size:14px;}
@@ -1100,7 +1088,7 @@
   <div id="atsClassControl"><button id="atsClassToggle" type="button" aria-pressed="true">ATS CLASS ON</button><span id="atsClassStatus">B/C/D · 로드 중</span></div>
   <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.24 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.25 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -1142,6 +1130,7 @@
   <div id="pointPopup" class="point-popup" hidden>
     <div class="popup-head">
       <span id="popupTitle">포인트 설정</span>
+      <button id="popupDelete" class="popup-btn popup-delete point-delete-action" type="button">삭제</button>
       <button id="popupClose" class="popup-close" type="button" aria-label="닫기">×</button>
     </div>
 
@@ -1152,14 +1141,13 @@
     <input id="pointAltitudeInput" class="popup-input" type="number" min="0" max="60000" step="100" inputmode="numeric" />
     <div id="pointAltitudeError" role="alert" style="color:#ffb4b4;font-size:12px" hidden>0~60,000 ft 범위로 입력하세요.</div>
 
-    <button id="samePointBtn" class="same-point-btn" type="button" hidden>출발/도착 동일</button>
 
     <div class="popup-actions">
       <button id="popupSave" class="popup-btn popup-save" type="button">저장</button>
-      <button id="popupDelete" class="popup-btn popup-delete" type="button">삭제</button>
     </div>
   </div>
 
+  <section id="firstViaHint" hidden role="status"><div class="first-via-head"><span>첫 번째 경유지를 선택하세요</span><button id="firstViaCancel" class="ui-close" type="button" aria-label="경유지 선택 취소">×</button></div><div id="firstViaChoices"></div></section>
   <div id="dragHint" class="drag-hint">루트를 원하는 위치까지 드래그한 뒤 놓으세요</div>
 
   <div class="nav-controls" aria-label="지도 방향 및 현위치">
@@ -1218,6 +1206,9 @@
       <div id="pressureDial" aria-label="기압 회전 다이얼"><svg viewBox="0 0 400 400" aria-hidden="true"><g id="pressureTicks"></g><path d="M8 195 L30 200 L8 205 Z" fill="#ffdb48" /></svg><button id="pressureClose" type="button" aria-label="기압 도구 닫기">×</button></div>
     </section>
     <script type="module">
+  import { createReturnRouteController } from "./js/route-return.mjs";
+  import { mountFirstViaPicker } from "./js/first-via-picker.mjs";
+  import * as routeStateRepository from "./js/data/route-state-repository.mjs";
   import { createAirspaceInteraction } from "./js/map/airspace-interaction.mjs";
   import { createAtsClassLayer } from "./js/map/ats-class-layer.mjs";
   import { createAirspaceLayer } from "./js/map/airspace-layer.mjs";
@@ -1330,7 +1321,6 @@
     const routeDeleteBtn = document.getElementById("routeDeleteBtn");
     const newRouteShell = document.getElementById("newRouteShell");
     const newRouteBtn = document.getElementById("newRouteBtn");
-    const samePointBtn = document.getElementById("samePointBtn");
     const locateAircraftBtn = document.getElementById("locateAircraftBtn");
     const orientationBtn = document.getElementById("orientationBtn");
     const compassRotor = document.getElementById("compassRotor");
@@ -1378,12 +1368,13 @@
 
 
 
-    function airportFeatureToRoutePoint(feature) {
+    function airportFeatureToRoutePoint(feature, allocate = true) {
       const props = feature.properties || {};
       const [longitude, latitude] = feature.geometry.coordinates;
 
       return {
-        id: nextPointId++,
+        id: allocate ? nextPointId++ : undefined,
+        ...(props.customFixId?{customFixId:props.customFixId}:props.icao||feature.id?{airportId:props.icao||String(feature.id)}:{}),
         name: String(props.nameKo || "").trim(),
         altitudeMslFeet: 0,
         longitude: Number(longitude),
@@ -1392,6 +1383,7 @@
     }
 
     function clearRouteForAirportEndpointSelection() {
+      routeDestination?.cancel();
       route = [];
       pendingDestinationAirport = null;
       clearPointMarkers();
@@ -1400,7 +1392,6 @@
       setPreview([]);
       refreshRoute3D();
       closePointPopup();
-      sameOriginDestination = false;
 
       routeModeActive = true;
       routeInfoShell.classList.remove("collapsed");
@@ -1409,11 +1400,11 @@
     }
 
     function setAirportAsDeparture(feature) {
+      routeDestination?.cancel();
       if (route.length >= 2) {
         clearRouteForAirportEndpointSelection();
       } else {
         routeModeActive = true;
-        sameOriginDestination = false;
       }
 
       const departure = airportFeatureToRoutePoint(feature);
@@ -1434,12 +1425,11 @@
       renderRoute({ autoOpen: true });
     }
 
-    function setAirportAsDestination(feature) {
+    function applyAirportDestination(feature) {
       if (route.length >= 2) {
         clearRouteForAirportEndpointSelection();
       } else {
         routeModeActive = true;
-        sameOriginDestination = false;
       }
 
       if (route.length === 1) {
@@ -1451,6 +1441,10 @@
 
       pendingDestinationAirport = feature;
       renderRoute({ autoOpen: true });
+    }
+
+    async function setAirportAsDestination(feature) {
+      return routeDestination.destination(airportFeatureToRoutePoint(feature,false),()=>applyAirportDestination(feature));
     }
 
     function buildAirportPopupContent(feature) {
@@ -1522,6 +1516,7 @@
     }
 
     function showAirportPopup(feature) {
+      if(routeDestination?.isSelecting()){completeFirstVia(airportFeatureToRoutePoint(feature,false));return;}
       if (activeAirportPopup) {
         activeAirportPopup.remove();
         activeAirportPopup = null;
@@ -1567,6 +1562,7 @@
 
       const element = document.createElement("div");
       element.className = "airport-dom-marker";
+      element.dataset.routePickKey="airport:"+(props.icao||AIRPORT_POINTS_GEOJSON.features.indexOf(feature));
       element.setAttribute("role", "button");
       element.setAttribute(
         "aria-label",
@@ -1992,6 +1988,7 @@
       invalidateRoute3DGeometry();
       refreshRoute3D();
 
+      scheduleRouteSave();
       if (rerender) updateRouteInfo();
       return true;
     }
@@ -3450,7 +3447,8 @@
     let nextPointId = 1;
 
     let routeModeActive = false;
-    let sameOriginDestination = false;
+    let routeDestination=null,viaPicker=null,routeModeCleanup=false;
+    let routeHydrated=false,routeRestoreFailed=false,routeRevision=0;
     let pendingDestinationAirport = null;
 
     let dragState = {
@@ -3794,8 +3792,8 @@
     });
 
     newRouteBtn.addEventListener("click", () => {
+      routeDestination?.cancel();
       routeModeActive = true;
-      sameOriginDestination = false;
       pendingDestinationAirport = null;
       routeInfoShell.classList.remove("collapsed");
       updateRouteInfo({ autoOpen: true });
@@ -3946,6 +3944,7 @@
     function createPointMarker(point, index) {
       const wrap = document.createElement("div");
       wrap.className = "route-point-wrap";
+      wrap.dataset.routePickKey="route:"+point.id;
 
       const dot = document.createElement("div");
       dot.className = "route-point-dot";
@@ -3980,6 +3979,7 @@
       let detachedFromFix = false;
 
       wrap.addEventListener("pointerdown", () => {
+        if(routeDestination?.isSelecting())return;
         pointPointerActive = true;
         suppressNextRouteDrag = true;
       });
@@ -4015,28 +4015,6 @@
         if (currentIndex < route.length - 1) {
           const next = route[currentIndex + 1];
           previewCoords.push([next.longitude, next.latitude]);
-        }
-
-        // For same-origin/destination mode, keep the preview meaningful
-        // when either coincident endpoint is dragged.
-        if (sameOriginDestination && route.length >= 2) {
-          if (currentIndex === 0 && route.length > 2) {
-            const next = route[1];
-            setPreview([
-              [ll.lng, ll.lat],
-              [next.longitude, next.latitude]
-            ]);
-            return;
-          }
-
-          if (currentIndex === route.length - 1 && route.length > 2) {
-            const prev = route[route.length - 2];
-            setPreview([
-              [prev.longitude, prev.latitude],
-              [ll.lng, ll.lat]
-            ]);
-            return;
-          }
         }
 
         setPreview(previewCoords);
@@ -4083,15 +4061,7 @@
           target.name = ""; // Existing numbered waypoint rendering supplies the label.
         }
 
-        if (sameOriginDestination && route.length >= 2) {
-          if (currentIndex === 0) {
-            route[route.length - 1].longitude = ll.lng;
-            route[route.length - 1].latitude = ll.lat;
-          } else if (currentIndex === route.length - 1) {
-            route[0].longitude = ll.lng;
-            route[0].latitude = ll.lat;
-          }
-        }
+
 
         setPreview([]);
         renderRoute();
@@ -4298,6 +4268,7 @@
       updateRouteInfo(options);
       updateAllLegBadgeRotations();
       refreshRoute3D();
+      routeRevision++;scheduleRouteSave();
     }
 
     let deleteConfirmPending=false;
@@ -4316,6 +4287,8 @@
       try{if(await confirmAction({title:"Route 삭제",message:"현재 비행경로 전체를 삭제하시겠습니까?"}))resetRoute(true);}finally{deleteConfirmPending=false;}
     }
     function resetRoute(deactivate = false) {
+      routeDestination?.cancel();
+      routeRevision++;
       route = [];
       clearPointMarkers();
       clearLegMarkers();
@@ -4323,7 +4296,6 @@
       setPreview([]);
       refreshRoute3D();
       closePointPopup();
-      sameOriginDestination = false;
       pendingDestinationAirport = null;
 
       if (deactivate) {
@@ -4334,6 +4306,7 @@
       } else {
         renderRoute();
       }
+      scheduleRouteSave();
     }
 
     function addInitialPoint(lngLat) {
@@ -4380,6 +4353,7 @@
     }
 
     function openPointPopup(pointId, markerElement) {
+      if(routeDestination?.isSelecting()){const candidate=route.find(p=>p.id===pointId);if(candidate)completeFirstVia(candidate);return;}
       selectedPointId = pointId;
       const point = route.find(p => p.id === pointId);
       if (!point) return;
@@ -4390,7 +4364,6 @@
       pointNameInput.value = point.name || "";
       pointAltitudeInput.value = String(routePointAltitudeFeet(point) ?? 0);
       pointAltitudeError.hidden = true;
-      samePointBtn.hidden = !(route.length === 1 && index === 0);
 
       const rect = markerElement.getBoundingClientRect();
       const popupWidth = 290;
@@ -4435,23 +4408,7 @@
 
     popupDelete.addEventListener("click",()=>{if(selectedPointId!=null)confirmRemoveRoutePoint(selectedPointId);});
 
-    samePointBtn.addEventListener("click", () => {
-      if (route.length !== 1) return;
 
-      const start = route[0];
-
-      route.push({
-        id: nextPointId++,
-        name: "",
-        altitudeMslFeet: 0,
-        longitude: start.longitude,
-        latitude: start.latitude
-      });
-
-      sameOriginDestination = true;
-      closePointPopup();
-      renderRoute({ autoOpen: true });
-    });
 
     document.addEventListener("pointerdown", (ev) => {
       if (!deleteConfirmPending && !popup.hidden && !popup.contains(ev.target)) {
@@ -4730,6 +4687,7 @@
       createAircraftMarker();
       updateCompassRotation();
       startTrackingSimulation();
+      await restoreRouteState();
       renderRoute();
 
       map.on("idle", () => {
@@ -4759,7 +4717,7 @@
       });
 
       function startRouteDrag(lngLat, source = "mouse", screenPoint = null) {
-        if (fixModeActive || !routeModeActive) return false;
+        if (routeDestination?.isSelecting() || fixModeActive || !routeModeActive) return false;
         if (route.length < 2) return false;
         if (pointPointerActive || suppressNextRouteDrag) return false;
 
@@ -4888,6 +4846,7 @@
 
       // Desktop mouse support.
       map.on("mousedown", "route-hit", (e) => {
+        if(routeDestination.isSelecting())return;
         if (e.originalEvent && e.originalEvent.button != null && e.originalEvent.button !== 0) return;
         e.preventDefault();
         startRouteDrag(e.lngLat, "mouse", e.point);
@@ -4907,6 +4866,7 @@
       // Only ONE finger may start a route-line drag.
       // Two fingers are deliberately left to MapLibre for pitch/zoom/rotate.
       map.on("touchstart", "route-hit", (e) => {
+        if(routeDestination.isSelecting())return;
         const touches = e.originalEvent?.touches;
         if (!touches || touches.length !== 1) return;
 
@@ -4962,6 +4922,7 @@
       });
 
       function handleMapTap(e) {
+        if(routeDestination?.isSelecting()){viaPicker.handleMapTap(e);return;}
         if (longPressSuppressed()) return;
         if (dragState.active) return;
         if (fixModeActive || measureTool?.isSelecting()) return;
@@ -4995,20 +4956,7 @@
           return;
         }
 
-        if (sameOriginDestination) {
-          const insertIndex = route.length - 1;
-          const inheritedAltitude = routePointAltitudeFeet(route[insertIndex - 1]) ?? 0;
 
-          route.splice(insertIndex, 0, {
-            id: nextPointId++,
-            name: "",
-            altitudeMslFeet: inheritedAltitude,
-            longitude: e.lngLat.lng,
-            latitude: e.lngLat.lat
-          });
-          renderRoute();
-          return;
-        }
 
         // Normal route already has departure/destination:
         // ordinary map tap intentionally does nothing.
@@ -5039,6 +4987,7 @@
       createCustomFix(location);
     });
     fixModeBtn.addEventListener("click", async () => {
+      routeDestination?.cancel();
       fixModeActive = !fixModeActive;
       fixModeBtn.classList.toggle("active", fixModeActive);
       fixModeBtn.setAttribute("aria-pressed", String(fixModeActive));
@@ -5093,6 +5042,7 @@
       return "";
     }
     async function openFixPopup(fix) {
+      if(routeDestination?.isSelecting()){completeFirstVia(fixRoutePoint(fix));return;}
       if (selectedFix && selectedFix !== fix && !(await saveCurrentFix())) return;
       selectedFix = fix;
       fixInput("fixName").value = fix.name;
@@ -5129,7 +5079,7 @@
       if (!restored && selectedFix && !(await saveCurrentFix())) return;
       const fix = restored ?? {id: createWaypointId(), name:`FIX ${nextFixId++}`, latitude:lngLat.lat, longitude:lngLat.lng, radiusNM:0, lowerFeet:null, upperFeet:null, lowerRef:"MSL", upperRef:"MSL", saved:false};
       customFixes.push(fix);
-      const el = document.createElement("div"); el.className = "custom-fix-pin"; el.innerHTML = pinSvg;
+      const el = document.createElement("div"); el.className = "custom-fix-pin"; el.dataset.routePickKey="fix:"+fix.id; el.innerHTML = pinSvg;
       const name = document.createElement("span"); name.className = "custom-fix-name"; el.appendChild(name);
       const altitudeLabel = document.createElement("div");altitudeLabel.className="custom-fix-altitude";altitudeLabel.hidden=true;el.appendChild(altitudeLabel);
       const marker = new maplibregl.Marker({element:el,anchor:"bottom",rotationAlignment:"viewport",pitchAlignment:"viewport"}).setLngLat([fix.longitude,fix.latitude]).addTo(map);
@@ -5137,6 +5087,7 @@
       let press = null;
       for (const type of ["touchstart", "touchmove", "touchend"]) el.addEventListener(type, event => event.stopPropagation(), {passive:true});
       el.addEventListener("pointerdown", event => {
+        if(routeDestination?.isSelecting())return;
         event.stopPropagation();
         if (event.button !== 0) return;
         const state = {id:event.pointerId,x:event.clientX,y:event.clientY,dragging:false,timer:null,panWasEnabled:map.dragPan.isEnabled()};
@@ -5225,19 +5176,24 @@
       if (!selectedFix) return;
       const fix=selectedFix;
       if(!(await saveCurrentFix()))return;
-      const point={id:nextPointId++,name:fix.name,latitude:fix.latitude,longitude:fix.longitude,altitudeMslFeet:0,customFixId:fix.id};
-      routeModeActive=true;sameOriginDestination=false;pendingDestinationAirport=null;
+      if(role==="destination")return routeDestination.destination(fixRoutePoint(fix),()=>applyFixDestination(fix));
+      routeDestination.cancel();
+      const point={...fixRoutePoint(fix),id:nextPointId++};
+      routeModeActive=true;pendingDestinationAirport=null;
       if(role === "departure") {
         if(route.length)route[0]=point;else route.push(point);
-      } else if(role === "destination") {
-        if(route.length>=2)route[route.length-1]=point;
-        else if(route.length===1)route.push(point);
-        else { pendingDestinationAirport={type:"Feature",geometry:{type:"Point",coordinates:[fix.longitude,fix.latitude]},properties:{nameKo:fix.name}}; }
       } else {
         if(route.length<2){showRuntimeStatus("경유지 설정: 출발지와 도착지를 먼저 지정하세요.");return;}
         point.altitudeMslFeet=routePointAltitudeFeet(route[route.length-2])??0;
         route.splice(route.length-1,0,point);
       }
+      renderRoute({autoOpen:true});
+    }
+    function fixRoutePoint(fix){return {name:fix.name,latitude:fix.latitude,longitude:fix.longitude,altitudeMslFeet:0,customFixId:fix.id};}
+    function applyFixDestination(fix){
+      const point={...fixRoutePoint(fix),id:nextPointId++};routeModeActive=true;pendingDestinationAirport=null;
+      if(route.length>=2)route[route.length-1]=point;else if(route.length===1)route.push(point);
+      else pendingDestinationAirport={type:"Feature",geometry:{type:"Point",coordinates:[fix.longitude,fix.latitude]},properties:{nameKo:fix.name,customFixId:fix.id}};
       renderRoute({autoOpen:true});
     }
     fixInput("fixDeparture").addEventListener("click",()=>setFixRouteRole("departure"));
@@ -5467,8 +5423,51 @@
       for(const type of ["pointerdown","pointermove","pointerup","touchstart","touchmove","touchend","mousedown","click","wheel"])
         surface.addEventListener(type,event=>event.stopPropagation(),{passive:type.startsWith("touch")||type==="wheel"});
     }
+    function captureRouteState(){return {route:JSON.parse(JSON.stringify(route)),nextPointId,routeModeActive,pendingDestinationAirport};}
+    function applyRouteState(state){route=state.route;nextPointId=state.nextPointId;routeModeActive=state.routeModeActive;pendingDestinationAirport=state.pendingDestinationAirport??null;}
+    function scheduleRouteSave(){
+      if(!routeHydrated||routeRestoreFailed)return;
+      routeStateRepository.saveRouteState(routeDestination?.getCommittedState()??captureRouteState()).catch(error=>{console.error('Route storage',error);showRuntimeStatus('경로 저장 실패 — 새로고침 후 유지되지 않을 수 있습니다.');});
+    }
+    async function restoreRouteState(){
+      try{const saved=await routeStateRepository.loadRouteState();if(saved&&routeRevision===0)applyRouteState(saved);}
+      catch(error){routeRestoreFailed=true;console.error('Route restore',error);showRuntimeStatus('경로 복원 실패 — 저장된 경로를 덮어쓰지 않았습니다.');}
+      finally{routeHydrated=true;}
+    }
+    function completeFirstVia(point){
+      if(!routeDestination.isSelecting())return false;
+      suppressTapUntil=performance.now()+700;
+      return routeDestination.pick(point);
+    }
+    function firstViaCandidates(screen,target){
+      const candidates=[
+        ...AIRPORT_POINTS_GEOJSON.features.map((f,i)=>({key:'airport:'+(f.properties.icao||i),name:f.properties.nameKo||f.properties.nameEn,kind:'공항',point:airportFeatureToRoutePoint(f,false)})),
+        ...customFixes.filter(f=>f.saved).map(f=>({key:'fix:'+f.id,name:f.name,kind:'FIX',point:fixRoutePoint(f)})),
+        ...route.map(p=>({key:'route:'+p.id,name:p.name||'포인트',kind:'Waypoint',point:p}))
+      ];
+      const key=target?.closest?.('[data-route-pick-key]')?.dataset.routePickKey;
+      if(key){const exact=candidates.find(c=>c.key===key);return exact?[exact]:[];}
+      return candidates.filter(c=>{const p=map.project([c.point.longitude,c.point.latitude]);return Math.hypot(p.x-screen.x,p.y-screen.y)<=8;});
+    }
+    routeDestination=createReturnRouteController({getState:captureRouteState,setState:applyRouteState,allocateId:()=>nextPointId++,
+      confirm:()=>{
+        const answer=confirmAction({title:'출발지와 도착지가 같습니다',message:'같은 지점을 출발지와 도착지로 설정할까요?',cancelText:'취소',confirmText:'확인',destructive:false});
+        document.querySelector('.ui-confirm')?.classList.add('route-return-confirm');return answer;
+      },
+      onChange:()=>renderRoute({autoOpen:true}),onMode:active=>{
+        viaPicker?.sync(active);
+        if(active){
+          // End competing map-input tools through their existing cleanup handlers.
+          if(measureTool.getState().active){routeModeCleanup=true;try{document.getElementById('measureButton').click();}finally{routeModeCleanup=false;}}
+          fixModeActive=false;fixCenterPicker.hidden=true;fixModeBtn.classList.remove('active');fixModeBtn.setAttribute('aria-pressed','false');
+          closePointPopup();airspaceInteraction?.clear();setPreview([]);map.dragPan.enable();
+        }else suppressTapUntil=performance.now()+700;
+      }
+    });
+    viaPicker=mountFirstViaPicker({map,isActive:()=>routeDestination.isSelecting(),getCandidates:firstViaCandidates,onPick:completeFirstVia,onCancel:()=>routeDestination.cancel()});
+    document.getElementById('measureButton').addEventListener('click',()=>{if(!routeModeCleanup)routeDestination.cancel();},true);
     const measureTool = mountMeasureDistance({map,maplibregl});
-    const airspaceInteraction=createAirspaceInteraction({map,maplibregl,canInspect:()=>!fixModeActive&&!sameOriginDestination&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2),adapters:{terrain:terrainElevationMeters,mercator:mercatorData,matrix:extractProjectionMatrix,linkProgram:linkRoute3DProgram,getRoute:()=>route.map(p=>({latitude:p.latitude,longitude:p.longitude,altitudeFeet:routePointAltitudeFeet(p)??0})),interpolate:interpolateRouteLocation}});
+    const airspaceInteraction=createAirspaceInteraction({map,maplibregl,canInspect:()=>!fixModeActive&&!routeDestination?.isSelecting()&&!dragState.active&&!pointPointerActive&&!longPressSuppressed()&&!measureTool.getState().active&&popup.hidden&&fixPopup.hidden&&!(routeModeActive&&route.length<2),adapters:{terrain:terrainElevationMeters,mercator:mercatorData,matrix:extractProjectionMatrix,linkProgram:linkRoute3DProgram,getRoute:()=>route.map(p=>({latitude:p.latitude,longitude:p.longitude,altitudeFeet:routePointAltitudeFeet(p)??0})),interpolate:interpolateRouteLocation}});
     const airspaceLayer=createAirspaceLayer({map,maplibregl,interaction:airspaceInteraction});
     const atsClassLayer=createAtsClassLayer({map,maplibregl,interaction:airspaceInteraction});
     const positionReport = mountPositionReport({
@@ -5487,6 +5486,8 @@
       atsClassLayer,
       airspaceInteraction,
 
+      routeStateRepository,
+      getFirstViaSelectionState:()=>({active:routeDestination.isSelecting(),confirming:routeDestination.isConfirming()}),
       getRoute() {
         return JSON.parse(JSON.stringify(route));
       },
@@ -5514,8 +5515,8 @@
       },
 
       startNewRoute() {
+        routeDestination?.cancel();
         routeModeActive = true;
-        sameOriginDestination = false;
         updateRouteInfo({ autoOpen: true });
       },
 
