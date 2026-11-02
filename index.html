@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-  <title>KoreaVFR_v2.25</title>
+  <title>KoreaVFR_v2.26</title>
   <link rel="stylesheet" href="./js/first-via-picker.css" />
   <link rel="stylesheet" href="./js/map/airspace-interaction.css" />
   <link rel="stylesheet" href="./js/map/ats-class-layer.css" />
@@ -1088,7 +1088,7 @@
   <div id="atsClassControl"><button id="atsClassToggle" type="button" aria-pressed="true">ATS CLASS ON</button><span id="atsClassStatus">B/C/D · 로드 중</span></div>
   <div id="airspaceControl"><button id="airspaceToggle" type="button" aria-pressed="true">AIRSPACE ON</button><span id="airspaceStatus">2026-10-15 DB · 로드 중</span></div>
   <div id="runtimeStatusBanner"></div>
-  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.25 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
+  <div id="simulationStatus" role="status" style="position:fixed;top:12px;left:12px;z-index:1000;padding:8px 12px;border-radius:8px;background:#673b00;color:#fff;font:700 12px/1.5 Arial,sans-serif;pointer-events:none">KoreaVFR_v2.26 · SIM — 가상 위치<br><span id="magneticStatus">자기편차 확인 중</span></div>
 
   <div id="routeInfoShell" class="route-info-shell hidden">
     <div class="route-info-panel">
@@ -2077,95 +2077,52 @@
         other.y,
         other.z,
         side,
-        airMeters
+        airMeters,
+        other.airMeters
       );
     }
 
-    function buildAirRibbonGeometry() {
-      const vertices = [];
-
-      // Only route points + their MSL values define the magenta route.
+    // One shared geodesic/MSL path for ribbon and curtain, built per route revision.
+    function buildRoute3DSamples() {
+      const legs = [];
       for (let i = 0; i < route.length - 1; i++) {
-        const a = route[i];
-        const b = route[i + 1];
-
-        const altAFeet = routePointAltitudeFeet(a);
-        const altBFeet = routePointAltitudeFeet(b);
-
+        const a = route[i], b = route[i + 1];
+        const altAFeet = routePointAltitudeFeet(a), altBFeet = routePointAltitudeFeet(b);
         if (altAFeet == null || altBFeet == null) continue;
-
-        const altAMeters = altAFeet * 0.3048;
-        const altBMeters = altBFeet * 0.3048;
-
-        const p = mercatorData(
-          a.longitude,
-          a.latitude,
-          altAMeters
-        );
-        const q = mercatorData(
-          b.longitude,
-          b.latitude,
-          altBMeters
-        );
-
-        // Two triangles per route segment; shader extrudes in screen space.
-        pushAirRibbonVertex(vertices, p, q, -1, altAMeters);
-        pushAirRibbonVertex(vertices, p, q, +1, altAMeters);
-        pushAirRibbonVertex(vertices, q, p, +1, altBMeters);
-
-        pushAirRibbonVertex(vertices, p, q, -1, altAMeters);
-        pushAirRibbonVertex(vertices, q, p, +1, altBMeters);
-        pushAirRibbonVertex(vertices, q, p, -1, altBMeters);
+        const distanceNM = gcDistanceMeters(a, b) / M_PER_NM;
+        const segmentCount = Math.max(1, Math.min(4096, Math.ceil(distanceNM / CURTAIN_SEGMENT_NM)));
+        const samples = [];
+        for (let j = 0; j <= segmentCount; j++) {
+          const t = j / segmentCount, ll = interpolateRouteLocation(a, b, t);
+          const airMeters = (altAFeet + (altBFeet - altAFeet) * t) * 0.3048;
+          samples.push({...mercatorData(ll.longitude, ll.latitude, airMeters), airMeters});
+        }
+        legs.push({a, b, altAFeet, altBFeet, distanceNM, samples});
       }
+      return legs;
+    }
 
+    function buildAirRibbonGeometry(legs = buildRoute3DSamples()) {
+      const vertices = [];
+      for (const {samples} of legs) {
+        for (let i = 0; i < samples.length - 1; i++) {
+          const p = samples[i], q = samples[i + 1];
+          // The reverse-facing q endpoint has the opposite screen-space normal.
+          pushAirRibbonVertex(vertices, p, q, -1, p.airMeters);
+          pushAirRibbonVertex(vertices, p, q, +1, p.airMeters);
+          pushAirRibbonVertex(vertices, q, p, -1, q.airMeters);
+          pushAirRibbonVertex(vertices, p, q, -1, p.airMeters);
+          pushAirRibbonVertex(vertices, q, p, -1, q.airMeters);
+          pushAirRibbonVertex(vertices, q, p, +1, q.airMeters);
+        }
+      }
       return new Float32Array(vertices);
     }
 
-    function buildCurtainGeometry() {
+    function buildCurtainGeometry(legs = buildRoute3DSamples()) {
       const curtainVertices = [];
       const verticalVertices = [];
-
-      for (let i = 0; i < route.length - 1; i++) {
-        const a = route[i];
-        const b = route[i + 1];
-
-        const altAFeet = routePointAltitudeFeet(a);
-        const altBFeet = routePointAltitudeFeet(b);
-
-        if (altAFeet == null || altBFeet == null) continue;
-
-        const distanceNM = gcDistanceMeters(a, b) / M_PER_NM;
-
-        const segmentCount = Math.max(
-          1,
-          Math.min(
-            4096,
-            Math.ceil(distanceNM / CURTAIN_SEGMENT_NM)
-          )
-        );
-
-        const samples = [];
-
-        for (let s = 0; s <= segmentCount; s++) {
-          const t = s / segmentCount;
-          const ll = interpolateRouteLocation(a, b, t);
-
-          const airFeet =
-            altAFeet + (altBFeet - altAFeet) * t;
-          const airMeters = airFeet * 0.3048;
-
-          const m = mercatorData(
-            ll.longitude,
-            ll.latitude,
-            airMeters
-          );
-
-          samples.push({
-            ...m,
-            airMeters
-          });
-        }
-
+      for (const {a, b, altAFeet, altBFeet, distanceNM, samples} of legs) {
         for (let s = 0; s < samples.length - 1; s++) {
           const p = samples[s];
           const q = samples[s + 1];
@@ -2209,18 +2166,10 @@
           if (dNM >= distanceNM - 1e-6) continue;
 
           const t = distanceNM > 0 ? dNM / distanceNM : 0;
-          const ll = interpolateRouteLocation(a, b, t);
-
-          const airFeet =
-            altAFeet + (altBFeet - altAFeet) * t;
-          const airMeters = airFeet * 0.3048;
-
-          const p = mercatorData(
-            ll.longitude,
-            ll.latitude,
-            airMeters
-          );
-
+          const at = t * (samples.length - 1), index = Math.min(Math.floor(at), samples.length - 2);
+          const fraction = at - index, left = samples[index], right = samples[index + 1];
+          const p = {};
+          for (const key of ['x','y','z','meterScale','airMeters']) p[key] = left[key] + (right[key] - left[key]) * fraction;
           pushCurtainVertex(
             verticalVertices,
             p.x, p.y, p.z, p.airMeters, p.meterScale, 0
@@ -2261,17 +2210,17 @@
       };
     }
 
-    function buildTerrainHeightMapBounds() {
+    function buildTerrainHeightMapBounds(legs = buildRoute3DSamples()) {
       if (route.length < 2) return null;
 
-      const coords = route.map(point =>
-        mercatorData(point.longitude, point.latitude, 0)
-      );
+      const coords = legs.flatMap(leg => leg.samples);
+      if (!coords.length) return null;
 
-      let minX = Math.min(...coords.map(p => p.x));
-      let maxX = Math.max(...coords.map(p => p.x));
-      let minY = Math.min(...coords.map(p => p.y));
-      let maxY = Math.max(...coords.map(p => p.y));
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const p of coords) {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      }
 
       const spanX = maxX - minX;
       const spanY = maxY - minY;
@@ -2298,12 +2247,13 @@
 
       if (route3DLayerState.routeSignature === signature) return;
 
-      const curtain = buildCurtainGeometry();
+      const legs = buildRoute3DSamples();
+      const curtain = buildCurtainGeometry(legs);
 
       route3DLayerState.curtainVertices = curtain.curtain;
       route3DLayerState.verticalVertices = curtain.vertical;
-      route3DLayerState.airVertices = buildAirRibbonGeometry();
-      route3DLayerState.bounds = buildTerrainHeightMapBounds();
+      route3DLayerState.airVertices = buildAirRibbonGeometry(legs);
+      route3DLayerState.bounds = buildTerrainHeightMapBounds(legs);
       route3DLayerState.routeSignature = signature;
       route3DLayerState.heightMapReady = false;
     }
@@ -2337,7 +2287,7 @@
     }
 
     function bindAirRibbonAttributes(gl, program, vertices) {
-      const stride = 8 * Float32Array.BYTES_PER_ELEMENT;
+      const stride = 9 * Float32Array.BYTES_PER_ELEMENT;
 
       gl.bindBuffer(gl.ARRAY_BUFFER, route3DLayerState.airBuffer);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.DYNAMIC_DRAW);
@@ -2346,7 +2296,8 @@
         ["a_pos", 3, 0],
         ["a_other", 3, 3],
         ["a_side", 1, 6],
-        ["a_air_meters", 1, 7]
+        ["a_air_meters", 1, 7],
+        ["a_other_air_meters", 1, 8]
       ];
 
       for (const [name, size, offset] of specs) {
@@ -2577,6 +2528,7 @@
             in vec3 a_other;
             in float a_side;
             in float a_air_meters;
+            in float a_other_air_meters;
 
             out vec2 v_mercator;
             out float v_air_meters;
@@ -2587,6 +2539,22 @@
               vec4 otherClip =
                 u_matrix * vec4(a_other, 1.0);
 
+              float nearDistance = clip.z + clip.w;
+              float otherNearDistance = otherClip.z + otherClip.w;
+              float cut = 0.0;
+              if (nearDistance < 0.000001 && otherNearDistance < 0.000001) {
+                gl_Position = vec4(0.0, 0.0, -2.0, 1.0);
+                v_mercator = a_pos.xy;
+                v_air_meters = a_air_meters;
+                return;
+              }
+              if (nearDistance < 0.000001) {
+                cut = (0.000001 - nearDistance) / (otherNearDistance - nearDistance);
+                clip = mix(clip, otherClip, cut);
+              } else if (otherNearDistance < 0.000001) {
+                float otherCut = (0.000001 - otherNearDistance) / (nearDistance - otherNearDistance);
+                otherClip = mix(otherClip, clip, otherCut);
+              }
               vec2 ndc = clip.xy / clip.w;
               vec2 otherNdc =
                 otherClip.xy / otherClip.w;
@@ -2612,8 +2580,8 @@
               clip.xy += offsetNdc * clip.w;
 
               gl_Position = clip;
-              v_mercator = a_pos.xy;
-              v_air_meters = a_air_meters;
+              v_mercator = mix(a_pos.xy, a_other.xy, cut);
+              v_air_meters = mix(a_air_meters, a_other_air_meters, cut);
             }
           `;
 
@@ -2814,7 +2782,7 @@
                           gl.drawArrays(
                             gl.TRIANGLES,
                             0,
-                            airVertices.length / 8
+                            airVertices.length / 9
                           );
 
                           if (topView) {
